@@ -134,10 +134,17 @@ def send_welcome_email(to_email, full_name):
 
 def check_license_online(key):
     try:
+        # !!! ZDE UPRAVTE URL NA SVOU 'RAW' ADRESU GISTU !!!
+        # Příklad: https://gist.githubusercontent.com/UZIVATEL/HASH/raw/licence.json
         url = f"https://gist.githubusercontent.com/hrozinka/6cd3ef1eea1e6d7dc7b188bdbeb84235/raw/licence.json?t={int(datetime.now().timestamp())}"
+        
         r = requests.get(url, timeout=3)
-        if r.status_code == 200 and key in r.json():
-            return True, "Aktivní", "2099-12-31"
+        if r.status_code == 200:
+            data = r.json()
+            if key in data:
+                # ZDE SE NAČÍTÁ DATUM PŘÍMO Z JSONU (hodnota klíče)
+                exp_date = data[key]
+                return True, "Aktivní", exp_date
     except: pass
     return False, "Neplatný klíč", None
 
