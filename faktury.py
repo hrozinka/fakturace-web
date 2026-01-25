@@ -25,13 +25,13 @@ SYSTEM_EMAIL = {
     "enabled": True, 
     "server": "smtp.seznam.cz",
     "port": 465,
-    "email": "jsem@michalkochtik.cz",  # Změňte na váš odesílací email
+    "email": "jsem@michalkochtik.cz",
     "password": email_password 
 }
 
 DB_FILE = 'fakturace_v11_pro.db'
 
-# --- 1. DESIGN A CSS (TMAVÝ REŽIM) ---
+# --- 1. DESIGN A CSS (TMAVÝ REŽIM + OPRAVY TLAČÍTEK) ---
 st.set_page_config(page_title="Fakturační Systém", page_icon="🧾", layout="wide")
 
 st.markdown("""
@@ -40,7 +40,6 @@ st.markdown("""
     .stApp { background-color: #0e1117; color: #e5e7eb; }
     
     /* === VSTUPNÍ POLE === */
-    /* Sjednocení vzhledu všech inputů do tmavé */
     .stTextInput input, .stNumberInput input, .stTextArea textarea, .stDateInput input, 
     .stSelectbox div[data-baseweb="select"] {
         background-color: #1f2937 !important; 
@@ -49,8 +48,7 @@ st.markdown("""
         border-radius: 6px;
     }
     
-    /* === EXPANDERY (ROZBALOVACÍ MENU) === */
-    /* Odstranění bílého pozadí po rozbalení */
+    /* === EXPANDERY === */
     div[data-testid="stExpander"] {
         background-color: #1f2937 !important;
         border: 1px solid #374151 !important;
@@ -61,13 +59,13 @@ st.markdown("""
         background-color: transparent !important;
         color: #e5e7eb !important;
     }
-    div[data-testid="stExpander"] svg {
-        fill: #e5e7eb !important;
-    }
+    div[data-testid="stExpander"] svg { fill: #e5e7eb !important; }
 
-    /* === TLAČÍTKA (VČETNĚ DOWNLOAD/PDF) === */
-    /* Cílíme na běžná tlačítka I tlačítka pro stahování */
-    .stButton > button, div[data-testid="stDownloadButton"] > button {
+    /* === TLAČÍTKA - GLOBÁLNÍ OPRAVA (VČETNĚ KATEGORIÍ) === */
+    /* Všechna tlačítka (klasická, ve formuláři, stahovací) */
+    .stButton > button, 
+    div[data-testid="stDownloadButton"] > button,
+    div[data-testid="stForm"] button {
         background-color: #1f2937 !important;  /* Tmavě šedá */
         color: #e5e7eb !important;            /* Světlý text */
         border: 1px solid #374151 !important; /* Jemný okraj */
@@ -77,14 +75,16 @@ st.markdown("""
         font-weight: 500;
     }
     
-    /* Hover efekt (při najetí myší) */
-    .stButton > button:hover, div[data-testid="stDownloadButton"] > button:hover {
+    /* Hover efekt */
+    .stButton > button:hover, 
+    div[data-testid="stDownloadButton"] > button:hover,
+    div[data-testid="stForm"] button:hover {
         border-color: #eab308 !important;     /* Zlatý okraj */
         color: #eab308 !important;            /* Zlatý text */
         background-color: #111827 !important; /* Tmavší pozadí */
     }
     
-    /* Primární akční tlačítka (např. Uložit) - Zlatá výplň */
+    /* Primární tlačítka (např. Uložit) - Zlatá výplň */
     div[data-testid="stForm"] button[kind="primary"], button[kind="primary"] {
         background-color: #eab308 !important;
         color: #000000 !important;
@@ -93,46 +93,27 @@ st.markdown("""
     }
     div[data-testid="stForm"] button[kind="primary"]:hover {
         background-color: #ca8a04 !important;
+        color: #000000 !important;
+        border: none !important;
     }
 
     /* === STATISTIKY (MOBILNÍ OPTIMALIZACE) === */
     .mini-stat-container { 
-        display: flex; 
-        gap: 15px; 
-        margin-bottom: 20px; 
-        margin-top: 10px; 
-        justify-content: space-between; 
-        flex-wrap: wrap; 
+        display: flex; gap: 15px; margin-bottom: 20px; margin-top: 10px; 
+        justify-content: space-between; flex-wrap: wrap; 
     }
-    
     .mini-stat-box { 
-        background-color: #1f2937; 
-        border: 1px solid #374151; 
-        border-radius: 8px; 
-        padding: 20px; 
-        text-align: center; 
-        flex: 1; 
-        min-width: 200px; 
+        background-color: #1f2937; border: 1px solid #374151; border-radius: 8px; 
+        padding: 20px; text-align: center; flex: 1; min-width: 200px; 
     }
-    
-    /* Pokud je obrazovka menší než 768px (mobil/tablet), seřaď pod sebe */
     @media only screen and (max-width: 768px) {
-        .mini-stat-container {
-            flex-direction: column; 
-        }
-        .mini-stat-box {
-            width: 100%; 
-            margin-bottom: 10px;
-        }
+        .mini-stat-container { flex-direction: column; }
+        .mini-stat-box { width: 100%; margin-bottom: 10px; }
     }
-
-    /* Typografie ve statistikách */
-    .mini-label { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #9ca3af; margin-bottom: 8px; }
+    .mini-label { font-size: 13px; text-transform: uppercase; color: #9ca3af; margin-bottom: 8px; }
     .mini-val-green { font-size: 24px; font-weight: 700; color: #34d399; }
-    .mini-val-gray { font-size: 24px; font-weight: 700; color: #d1d5db; }
     .mini-val-red { font-size: 24px; font-weight: 700; color: #f87171; }
     
-    /* Ostatní styly */
     .auth-container { max-width: 500px; margin: 0 auto; padding: 40px 20px; background: #1f2937; border-radius: 10px; border: 1px solid #374151; }
     .promo-box { border: 2px solid #eab308; background-color: #422006; padding: 15px; border-radius: 10px; margin-bottom: 20px; text-align: center; }
     </style>
@@ -145,20 +126,16 @@ def get_db():
     return conn
 
 def run_query(sql, params=(), single=False):
-    """Bezpečné spuštění SQL dotazu"""
     conn = get_db()
     try:
         c = conn.cursor()
         c.execute(sql, params)
         res = c.fetchone() if single else c.fetchall()
         return res
-    except Exception as e:
-        return None
-    finally:
-        conn.close()
+    except: return None
+    finally: conn.close()
 
 def run_command(sql, params=()):
-    """Bezpečné spuštění příkazu (INSERT/UPDATE/DELETE)"""
     conn = get_db()
     try:
         c = conn.cursor()
@@ -169,70 +146,25 @@ def run_command(sql, params=()):
     except Exception as e:
         st.error(f"DB Error: {e}")
         return None
-    finally:
-        conn.close()
+    finally: conn.close()
 
 def init_db():
     conn = get_db()
     c = conn.cursor()
-    
-    # Tabulky
-    c.execute('''CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        full_name TEXT,
-        email TEXT,
-        phone TEXT,
-        license_key TEXT,
-        license_valid_until TEXT,
-        role TEXT DEFAULT 'user',
-        created_at TEXT,
-        last_active TEXT
-    )''')
-    
-    # Migrace (pro jistotu, pokud sloupce chybí)
+    c.execute('''CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, full_name TEXT, email TEXT, phone TEXT, license_key TEXT, license_valid_until TEXT, role TEXT DEFAULT 'user', created_at TEXT, last_active TEXT)''')
     try: c.execute("ALTER TABLE users ADD COLUMN last_active TEXT")
     except: pass
-    
-    c.execute('''CREATE TABLE IF NOT EXISTS nastaveni (
-        id INTEGER PRIMARY KEY, user_id INTEGER, nazev TEXT, adresa TEXT, ico TEXT, dic TEXT, 
-        ucet TEXT, banka TEXT, email TEXT, telefon TEXT, iban TEXT, 
-        smtp_server TEXT, smtp_port INTEGER, smtp_email TEXT, smtp_password TEXT, 
-        notify_email TEXT, notify_days INTEGER, notify_active INTEGER
-    )''')
-
-    c.execute('''CREATE TABLE IF NOT EXISTS klienti (
-        id INTEGER PRIMARY KEY, user_id INTEGER, jmeno TEXT, adresa TEXT, 
-        ico TEXT, dic TEXT, email TEXT, poznamka TEXT
-    )''')
+    c.execute('''CREATE TABLE IF NOT EXISTS nastaveni (id INTEGER PRIMARY KEY, user_id INTEGER, nazev TEXT, adresa TEXT, ico TEXT, dic TEXT, ucet TEXT, banka TEXT, email TEXT, telefon TEXT, iban TEXT, smtp_server TEXT, smtp_port INTEGER, smtp_email TEXT, smtp_password TEXT, notify_email TEXT, notify_days INTEGER, notify_active INTEGER)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS klienti (id INTEGER PRIMARY KEY, user_id INTEGER, jmeno TEXT, adresa TEXT, ico TEXT, dic TEXT, email TEXT, poznamka TEXT)''')
     try: c.execute("ALTER TABLE klienti ADD COLUMN poznamka TEXT")
     except: pass
-
-    c.execute('''CREATE TABLE IF NOT EXISTS kategorie (
-        id INTEGER PRIMARY KEY, user_id INTEGER, nazev TEXT, barva TEXT, 
-        prefix TEXT, aktualni_cislo INTEGER DEFAULT 1, logo_blob BLOB
-    )''')
-
-    c.execute('''CREATE TABLE IF NOT EXISTS faktury (
-        id INTEGER PRIMARY KEY, user_id INTEGER, cislo INTEGER, cislo_full TEXT, 
-        klient_id INTEGER, kategorie_id INTEGER, datum_vystaveni TEXT, datum_duzp TEXT, 
-        datum_splatnosti TEXT, castka_celkem REAL, zpusob_uhrady TEXT, 
-        variabilni_symbol TEXT, cislo_objednavky TEXT, uvodni_text TEXT, 
-        uhrazeno INTEGER DEFAULT 0, muj_popis TEXT
-    )''')
-
-    c.execute('''CREATE TABLE IF NOT EXISTS faktura_polozky (
-        id INTEGER PRIMARY KEY, faktura_id INTEGER, nazev TEXT, cena REAL
-    )''')
-    
-    # Admin účet
+    c.execute('''CREATE TABLE IF NOT EXISTS kategorie (id INTEGER PRIMARY KEY, user_id INTEGER, nazev TEXT, barva TEXT, prefix TEXT, aktualni_cislo INTEGER DEFAULT 1, logo_blob BLOB)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS faktury (id INTEGER PRIMARY KEY, user_id INTEGER, cislo INTEGER, cislo_full TEXT, klient_id INTEGER, kategorie_id INTEGER, datum_vystaveni TEXT, datum_duzp TEXT, datum_splatnosti TEXT, castka_celkem REAL, zpusob_uhrady TEXT, variabilni_symbol TEXT, cislo_objednavky TEXT, uvodni_text TEXT, uhrazeno INTEGER DEFAULT 0, muj_popis TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS faktura_polozky (id INTEGER PRIMARY KEY, faktura_id INTEGER, nazev TEXT, cena REAL)''')
     try:
         adm_pass = hashlib.sha256(str.encode("admin")).hexdigest()
-        c.execute("INSERT OR IGNORE INTO users (username, password_hash, role, full_name, email, phone) VALUES (?, ?, ?, ?, ?, ?)", 
-                  ("admin", adm_pass, "admin", "Super Admin", "admin@system.cz", "000000000"))
+        c.execute("INSERT OR IGNORE INTO users (username, password_hash, role, full_name, email, phone) VALUES (?, ?, ?, ?, ?, ?)", ("admin", adm_pass, "admin", "Super Admin", "admin@system.cz", "000000000"))
     except: pass
-
     conn.commit()
     conn.close()
 
@@ -241,8 +173,7 @@ if 'db_inited' not in st.session_state:
     st.session_state.db_inited = True
 
 # --- 3. POMOCNÉ FUNKCE ---
-def hash_password(password): 
-    return hashlib.sha256(str.encode(password)).hexdigest()
+def hash_password(password): return hashlib.sha256(str.encode(password)).hexdigest()
 
 def remove_accents(input_str):
     if not input_str: return ""
@@ -258,36 +189,40 @@ def format_date(d_str):
 def process_logo(uploaded_file):
     if not uploaded_file: return None
     try: 
-        img = Image.open(uploaded_file)
-        buf = io.BytesIO()
-        img.save(buf, format='PNG')
-        return buf.getvalue()
+        img = Image.open(uploaded_file); buf = io.BytesIO(); img.save(buf, format='PNG'); return buf.getvalue()
     except: return None
 
 def get_next_invoice_number(kat_id, uid):
     res = run_query("SELECT prefix, aktualni_cislo FROM kategorie WHERE id = ? AND user_id = ?", (kat_id, uid), single=True)
-    if res:
-        return (res['aktualni_cislo'], str(res['aktualni_cislo']), res['prefix'])
+    if res: return (res['aktualni_cislo'], str(res['aktualni_cislo']), res['prefix'])
     return (1, "1", "")
 
-# --- 4. ARES API (OPRAVENO) ---
+# --- 4. ARES API (KOMPLETNÍ OPRAVA) ---
 def get_ares_data(ico):
-    """Načte data z ARES (v1.0.4) - Opraveno pro rok 2025"""
+    """
+    Funkce pro načtení dat z ARES.
+    Vstup: IČO (str nebo int)
+    Výstup: Dict s daty nebo None
+    """
     import urllib3
     urllib3.disable_warnings()
     
     if not ico: return None
     
-    # 1. Čištění IČO (jen čísla, doplnit nuly na 8 znaků)
+    # 1. Čištění IČO - odstranit mezery, nečíselné znaky
     ico_clean = "".join(filter(str.isdigit, str(ico)))
+    
+    # 2. Validace délky
     if len(ico_clean) == 0: return None
+    
+    # 3. Doplnění nul na 8 znaků (např. 123 -> 00000123)
     ico_final = ico_clean.zfill(8)
     
     try:
-        # Nový ARES endpoint
+        # Oficiální API endpoint
         url = f"https://ares.gov.cz/ekonomicke-subjekty/v-1/ekonomicke-subjekty/{ico_final}"
         
-        # NUTNÉ: Hlavičky, jinak ARES vrací 403 Forbidden
+        # Nutné hlavičky (jinak vrací 403 Forbidden)
         headers = {
             "accept": "application/json",
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -297,36 +232,40 @@ def get_ares_data(ico):
         
         if r.status_code == 200:
             d = r.json()
-            
-            # Skládání adresy
             s = d.get('sidlo', {})
-            text_adresa = s.get('textovaAdresa', '')
             
-            if not text_adresa:
-                # Fallback skládání adresy
+            # Pokus 1: Textová adresa přímo z API
+            adr = s.get('textovaAdresa', '')
+            
+            # Pokus 2: Skládání adresy, pokud chybí
+            if not adr:
                 ulice = s.get('nazevUlice', '')
                 cislo = f"{s.get('cisloDomovni','')}/{s.get('cisloOrientacni','')}".strip('/')
                 if cislo == '/': cislo = s.get('cisloDomovni', '')
                 obec = s.get('nazevObce', '')
                 psc = s.get('psc', '')
                 
-                parts = [p for p in [ulice, cislo, psc, obec] if p]
-                text_adresa = ", ".join(parts) if parts else ""
+                parts = []
+                if ulice: parts.append(ulice)
+                if cislo: parts.append(cislo)
+                if psc and obec: parts.append(f"{psc} {obec}")
+                elif obec: parts.append(obec)
                 
-                # Formát: Ulice 123, 11000 Město
-                if ulice and cislo and obec:
-                    text_adresa = f"{ulice} {cislo}, {psc} {obec}"
-            
+                adr = ", ".join(parts) if parts else ""
+
             return {
                 "jmeno": d.get('obchodniJmeno', ''),
-                "adresa": text_adresa,
+                "adresa": adr,
                 "ico": ico_final,
                 "dic": d.get('dic', '')
             }
         else:
+            # Pro ladění (v produkci můžete zakomentovat)
+            # print(f"ARES Error {r.status_code}: {r.text}")
             return None
+            
     except Exception as e:
-        print(f"ARES Error: {str(e)}")
+        print(f"ARES Exception: {str(e)}")
         return None
 
 # --- 5. LICENSE CHECK ---
@@ -336,8 +275,7 @@ def check_license_online(key):
         r = requests.get(url, timeout=3)
         if r.status_code == 200:
             data = r.json()
-            if key in data:
-                return True, "Aktivní", data[key]
+            if key in data: return True, "Aktivní", data[key]
     except: pass
     return False, "Neplatný klíč", None
 
@@ -345,8 +283,7 @@ def send_welcome_email(to_email, full_name):
     if not SYSTEM_EMAIL["enabled"] or not SYSTEM_EMAIL["password"]: return False
     try:
         msg = MIMEMultipart()
-        msg['From'] = SYSTEM_EMAIL["email"]
-        msg['To'] = to_email
+        msg['From'] = SYSTEM_EMAIL["email"]; msg['To'] = to_email
         msg['Subject'] = "Vítejte v MojeFaktury!"
         body = f"Dobrý den, {full_name},\n\nděkujeme za registraci."
         msg.attach(MIMEText(body, 'plain'))
@@ -369,41 +306,29 @@ def generate_pdf(faktura_id, uid, is_pro):
                 try: 
                     self.add_font('ArialCS', '', 'arial.ttf', uni=True)
                     self.add_font('ArialCS', 'B', 'arial.ttf', uni=True)
-                    self.set_font('ArialCS', 'B', 24)
-                    self.font_ok = True
+                    self.set_font('ArialCS', 'B', 24); self.font_ok = True
                 except: pass
             if not self.font_ok: self.set_font('Arial', 'B', 24)
-            self.set_text_color(50, 50, 50)
-            self.cell(0, 10, 'FAKTURA', 0, 1, 'R')
-            self.ln(5)
+            self.set_text_color(50, 50, 50); self.cell(0, 10, 'FAKTURA', 0, 1, 'R'); self.ln(5)
 
     try:
-        data = run_query(
-            "SELECT f.*, k.jmeno as k_jmeno, k.adresa as k_adresa, k.ico as k_ico, k.dic as k_dic, kat.barva, kat.logo_blob "
-            "FROM faktury f JOIN klienti k ON f.klient_id = k.id JOIN kategorie kat ON f.kategorie_id = kat.id "
-            "WHERE f.id = ? AND f.user_id = ?", (faktura_id, uid), single=True)
-        
+        data = run_query("SELECT f.*, k.jmeno as k_jmeno, k.adresa as k_adresa, k.ico as k_ico, k.dic as k_dic, kat.barva, kat.logo_blob FROM faktury f JOIN klienti k ON f.klient_id = k.id JOIN kategorie kat ON f.kategorie_id = kat.id WHERE f.id = ? AND f.user_id = ?", (faktura_id, uid), single=True)
         if not data: return "Faktura nenalezena"
         polozky = run_query("SELECT * FROM faktura_polozky WHERE faktura_id = ?", (faktura_id,))
         moje = run_query("SELECT * FROM nastaveni WHERE user_id = ? LIMIT 1", (uid,), single=True) or {}
 
-        pdf = PDF()
-        pdf.add_page()
-        
+        pdf = PDF(); pdf.add_page()
         def stxt(t): return str(t) if getattr(pdf, 'font_ok', False) else remove_accents(str(t) if t else "")
         fname = 'ArialCS' if getattr(pdf, 'font_ok', False) else 'Arial'
         pdf.set_font(fname, '', 10)
 
-        # Logo
         if data['logo_blob']:
             try:
                 fn = f"t_{faktura_id}.png"
                 with open(fn, "wb") as f: f.write(data['logo_blob'])
-                pdf.image(fn, x=10, y=10, w=30)
-                os.remove(fn)
+                pdf.image(fn, x=10, y=10, w=30); os.remove(fn)
             except: pass
 
-        # Barva proužku (jen PRO)
         if is_pro:
             try: c = data['barva'].lstrip('#'); r, g, b = tuple(int(c[i:i+2], 16) for i in (0, 2, 4))
             except: r,g,b=100,100,100
@@ -412,56 +337,29 @@ def generate_pdf(faktura_id, uid, is_pro):
         pdf.set_text_color(100); pdf.set_y(40)
         pdf.cell(95, 5, stxt("DODAVATEL:"), 0, 0); pdf.cell(95, 5, stxt("ODBĚRATEL:"), 0, 1)
         pdf.set_text_color(0); y = pdf.get_y()
-        
-        # Dodavatel
         pdf.set_font(fname, '', 12); pdf.cell(95, 5, stxt(moje.get('nazev','')), 0, 1)
         pdf.set_font(fname, '', 10); pdf.multi_cell(95, 5, stxt(f"{moje.get('adresa','')}\nIČ: {moje.get('ico','')}\nDIČ: {moje.get('dic','')}\n{moje.get('email','')}"))
-        
-        # Odběratel
         pdf.set_xy(105, y); pdf.set_font(fname, '', 12); pdf.cell(95, 5, stxt(data['k_jmeno']), 0, 1)
         pdf.set_xy(105, pdf.get_y()); pdf.set_font(fname, '', 10); pdf.multi_cell(95, 5, stxt(f"{data['k_adresa']}\nIČ: {data['k_ico']}\nDIČ: {data['k_dic']}"))
-        
         pdf.ln(10); pdf.set_fill_color(r, g, b); pdf.rect(10, pdf.get_y(), 190, 2, 'F'); pdf.ln(5)
-        
-        # Detaily
         pdf.set_font(fname, '', 14); pdf.cell(100, 8, stxt(f"Faktura č.: {data['cislo_full']}"), 0, 1)
         pdf.set_font(fname, '', 10)
         pdf.cell(50, 6, stxt("Datum vystavení:"), 0, 0); pdf.cell(50, 6, format_date(data['datum_vystaveni']), 0, 1)
         pdf.cell(50, 6, stxt("Datum splatnosti:"), 0, 0); pdf.cell(50, 6, format_date(data['datum_splatnosti']), 0, 1)
-        
-        pdf.set_xy(110, pdf.get_y()-6)
-        pdf.cell(40, 6, stxt("Banka:"), 0, 0); pdf.cell(50, 6, stxt(moje.get('banka','')), 0, 1)
-        pdf.set_xy(110, pdf.get_y())
-        pdf.cell(40, 6, stxt("Číslo účtu:"), 0, 0); pdf.cell(50, 6, stxt(moje.get('ucet','')), 0, 1)
-        pdf.set_xy(110, pdf.get_y())
-        pdf.cell(40, 6, stxt("Var. symbol:"), 0, 0); pdf.cell(50, 6, str(data['variabilni_symbol']), 0, 1)
-        
-        # Tabulka
-        pdf.ln(15); pdf.set_fill_color(240)
-        pdf.cell(140, 8, stxt(" POLOŽKA / POPIS"), 1, 0, 'L', fill=True)
-        pdf.cell(50, 8, stxt("CENA "), 1, 1, 'R', fill=True)
-        pdf.ln(8)
-        
+        pdf.set_xy(110, pdf.get_y()-6); pdf.cell(40, 6, stxt("Banka:"), 0, 0); pdf.cell(50, 6, stxt(moje.get('banka','')), 0, 1)
+        pdf.set_xy(110, pdf.get_y()); pdf.cell(40, 6, stxt("Číslo účtu:"), 0, 0); pdf.cell(50, 6, stxt(moje.get('ucet','')), 0, 1)
+        pdf.set_xy(110, pdf.get_y()); pdf.cell(40, 6, stxt("Var. symbol:"), 0, 0); pdf.cell(50, 6, str(data['variabilni_symbol']), 0, 1)
+        pdf.ln(15); pdf.set_fill_color(240); pdf.cell(140, 8, stxt(" POLOŽKA / POPIS"), 1, 0, 'L', fill=True); pdf.cell(50, 8, stxt("CENA "), 1, 1, 'R', fill=True); pdf.ln(8)
         for item in polozky:
-            xb, yb = pdf.get_x(), pdf.get_y()
-            pdf.multi_cell(140, 8, stxt(item['nazev']), 0, 'L')
-            pdf.set_xy(xb + 140, yb)
-            pdf.cell(50, 8, stxt(f"{item['cena']:,.2f} Kč").replace(",", " "), 0, 1, 'R')
-            pdf.set_xy(10, max(pdf.get_y(), yb + 8))
-            pdf.set_draw_color(240); pdf.line(10, pdf.get_y(), 200, pdf.get_y())
-            
-        pdf.ln(5); pdf.set_font(fname, 'B', 14)
-        pdf.cell(40, 10, "", 0, 0)
-        pdf.cell(150, 10, stxt(f"CELKEM: {data['castka_celkem']:,.2f} Kč").replace(",", " "), 0, 1, 'R')
+            xb, yb = pdf.get_x(), pdf.get_y(); pdf.multi_cell(140, 8, stxt(item['nazev']), 0, 'L')
+            pdf.set_xy(xb + 140, yb); pdf.cell(50, 8, stxt(f"{item['cena']:,.2f} Kč").replace(",", " "), 0, 1, 'R')
+            pdf.set_xy(10, max(pdf.get_y(), yb + 8)); pdf.set_draw_color(240); pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+        pdf.ln(5); pdf.set_font(fname, 'B', 14); pdf.cell(40, 10, "", 0, 0); pdf.cell(150, 10, stxt(f"CELKEM: {data['castka_celkem']:,.2f} Kč").replace(",", " "), 0, 1, 'R')
         
-        # QR Kód
         if is_pro and moje.get('iban'):
             try:
                 qr_str = f"SPD*1.0*ACC:{moje['iban'].replace(' ','').upper()}*AM:{data['castka_celkem']:.2f}*CC:CZK*MSG:{stxt('Faktura '+str(data['cislo_full']))}"
-                img = qrcode.make(qr_str)
-                img.save(f"q_{faktura_id}.png")
-                pdf.image(f"q_{faktura_id}.png", x=10, y=pdf.get_y()-15, w=35)
-                os.remove(f"q_{faktura_id}.png")
+                img = qrcode.make(qr_str); img.save(f"q_{faktura_id}.png"); pdf.image(f"q_{faktura_id}.png", x=10, y=pdf.get_y()-15, w=35); os.remove(f"q_{faktura_id}.png")
             except: pass
 
         return pdf.output(dest='S').encode('latin-1', 'ignore')
@@ -472,8 +370,7 @@ if 'user_id' not in st.session_state: st.session_state.user_id = None
 if 'role' not in st.session_state: st.session_state.role = 'user'
 if 'is_pro' not in st.session_state: st.session_state.is_pro = False
 if 'full_name' not in st.session_state: st.session_state.full_name = ""
-if 'items_df' not in st.session_state: 
-    st.session_state.items_df = pd.DataFrame(columns=["Popis položky", "Cena"])
+if 'items_df' not in st.session_state: st.session_state.items_df = pd.DataFrame(columns=["Popis položky", "Cena"])
 if 'form_reset_id' not in st.session_state: st.session_state.form_reset_id = 0
 if 'ares_data' not in st.session_state: st.session_state.ares_data = {}
 
@@ -489,41 +386,30 @@ if not st.session_state.user_id:
     
     with t1:
         with st.form("login_form"):
-            u = st.text_input("Uživatelské jméno")
-            p = st.text_input("Heslo", type="password")
+            u = st.text_input("Uživatelské jméno"); p = st.text_input("Heslo", type="password")
             if st.form_submit_button("Přihlásit se", type="primary"):
                 res = run_query("SELECT * FROM users WHERE username=? AND password_hash=?", (u, hash_password(p)), single=True)
                 if res:
-                    st.session_state.user_id = res['id']
-                    st.session_state.username = res['username']
-                    st.session_state.role = res['role']
-                    st.session_state.full_name = res['full_name']
-                    st.session_state.user_email = res['email']
-                    st.session_state.is_pro = True if res['license_key'] else False
+                    st.session_state.user_id = res['id']; st.session_state.username = res['username']
+                    st.session_state.role = res['role']; st.session_state.full_name = res['full_name']
+                    st.session_state.user_email = res['email']; st.session_state.is_pro = True if res['license_key'] else False
                     run_command("UPDATE users SET last_active = ? WHERE id = ?", (datetime.now().isoformat(), res['id']))
                     st.rerun()
                 else: st.error("Neplatné údaje.")
 
     with t2:
         with st.form("reg_form"):
-            fn = st.text_input("Jméno")
-            ln = st.text_input("Příjmení")
-            usr = st.text_input("Login")
-            mail = st.text_input("Email")
-            tel = st.text_input("Telefon")
-            p1 = st.text_input("Heslo", type="password")
-            p2 = st.text_input("Heslo znova", type="password")
-            
+            fn = st.text_input("Jméno"); ln = st.text_input("Příjmení"); usr = st.text_input("Login")
+            mail = st.text_input("Email"); tel = st.text_input("Telefon")
+            p1 = st.text_input("Heslo", type="password"); p2 = st.text_input("Heslo znova", type="password")
             if st.form_submit_button("Registrovat"):
                 if p1 != p2: st.error("Hesla se neshodují.")
                 elif not mail or not p1 or not usr: st.error("Vyplňte povinné údaje.")
                 else:
                     try:
                         fullname = f"{fn} {ln}".strip()
-                        run_command("INSERT INTO users (username, password_hash, full_name, email, phone, created_at, last_active) VALUES (?, ?, ?, ?, ?, ?, ?)", 
-                                   (usr, hash_password(p1), fullname, mail, tel, datetime.now().isoformat(), datetime.now().isoformat()))
-                        send_welcome_email(mail, fullname)
-                        st.success("Účet vytvořen!")
+                        run_command("INSERT INTO users (username, password_hash, full_name, email, phone, created_at, last_active) VALUES (?, ?, ?, ?, ?, ?, ?)", (usr, hash_password(p1), fullname, mail, tel, datetime.now().isoformat(), datetime.now().isoformat()))
+                        send_welcome_email(mail, fullname); st.success("Účet vytvořen!")
                     except: st.error("Uživatel již existuje.")
     st.stop()
 
@@ -539,14 +425,12 @@ st.sidebar.markdown(f"👤 **{full_name_display}**")
 st.sidebar.caption(f"{'👑 ADMIN' if role=='admin' else ('⭐ PRO Verze' if is_pro else '🆓 FREE Verze')}")
 
 if st.sidebar.button("Odhlásit"):
-    st.session_state.user_id = None
-    st.rerun()
+    st.session_state.user_id = None; st.rerun()
 
 # --- ADMIN PANEL ---
 if role == 'admin':
     st.header("👑 Admin Panel")
     tabs = st.tabs(["Uživatelé", "Statistiky"])
-    
     with tabs[0]:
         users = run_query("SELECT * FROM users WHERE role != 'admin'")
         for u in users:
@@ -557,58 +441,106 @@ if role == 'admin':
                     if diff.total_seconds() < 1800: label = "🟢 ON"
                     else: label = f"{int(diff.total_seconds()/3600)}H"
                 except: pass
-
             with st.expander(f"{label} | {u['full_name']} | {u['username']}"):
                 c1, c2 = st.columns(2)
                 c1.write(f"Email: {u['email']}")
                 cur_lic = u['license_key'] or ""
                 new_lic = c2.text_input("Licence", value=cur_lic, key=f"lk_{u['id']}")
                 if c2.button("Uložit", key=f"blk_{u['id']}"):
-                    run_command("UPDATE users SET license_key=? WHERE id=?", (new_lic, u['id']))
-                    st.success("OK"); st.rerun()
+                    run_command("UPDATE users SET license_key=? WHERE id=?", (new_lic, u['id'])); st.success("OK"); st.rerun()
                 if c2.button("SMAZAT", key=f"del_{u['id']}", type="primary"):
                     run_command("DELETE FROM users WHERE id=?", (u['id'],)); st.rerun()
-
     with tabs[1]:
         c_u = run_query("SELECT COUNT(*) FROM users")[0][0]
         c_f = run_query("SELECT COUNT(*) FROM faktury")[0][0]
-        st.metric("Uživatelé", c_u)
-        st.metric("Faktury", c_f)
+        st.metric("Uživatelé", c_u); st.metric("Faktury", c_f)
 
 # --- UŽIVATELSKÁ ZÓNA ---
 else:
     menu = st.sidebar.radio("Menu", ["Faktury", "Klienti", "Kategorie", "Nastavení"], label_visibility="collapsed")
-    
     cnt_cli = run_query("SELECT COUNT(*) FROM klienti WHERE user_id=?", (uid,), single=True)[0]
     cnt_inv = run_query("SELECT COUNT(*) FROM faktury WHERE user_id=?", (uid,), single=True)[0]
 
     if menu == "Nastavení":
         st.header("⚙️ Nastavení")
+        # 1. LICENCE
         if not is_pro:
             st.markdown("""<div class='promo-box'><h3>🔓 Přejděte na PRO verzi</h3><p>Neomezené faktury.</p></div>""", unsafe_allow_html=True)
-            lk = st.text_input("Licenční klíč")
-            if st.button("Aktivovat"):
-                valid, msg, exp = check_license_online(lk)
-                if valid:
-                    run_command("UPDATE users SET license_key=?, license_valid_until=? WHERE id=?", (lk, exp, uid))
-                    st.session_state.is_pro = True; st.rerun()
-                else: st.error(msg)
+            with st.expander("Mám licenční klíč"):
+                lk = st.text_input("Klíč")
+                if st.button("Aktivovat"):
+                    valid, msg, exp = check_license_online(lk)
+                    if valid:
+                        run_command("UPDATE users SET license_key=?, license_valid_until=? WHERE id=?", (lk, exp, uid))
+                        st.session_state.is_pro = True; st.success("Aktivováno!"); st.rerun()
+                    else: st.error(msg)
         else:
             st.success("✅ PRO Verze aktivní")
+            with st.expander("🔑 Správa licence"):
+                u_data = run_query("SELECT license_key, license_valid_until FROM users WHERE id=?", (uid,), single=True)
+                cur_k = u_data['license_key'] if u_data else ""
+                valid_until = u_data['license_valid_until'] if u_data and u_data['license_valid_until'] else "Neznámo"
+                st.info(f"📅 Platnost do: **{format_date(valid_until)}**")
+                new_k = st.text_input("Změnit klíč", value=cur_k)
+                c1, c2 = st.columns(2)
+                if c1.button("💾 Změnit licenci"):
+                     valid, msg, exp = check_license_online(new_k)
+                     if valid:
+                         run_command("UPDATE users SET license_key=?, license_valid_until=? WHERE id=?", (new_k, exp, uid))
+                         st.success("Licence aktualizována"); st.rerun()
+                     else: st.error(msg)
+                if c2.button("🗑️ Deaktivovat (na FREE)", type="primary"):
+                    run_command("UPDATE users SET license_key=NULL, license_valid_until=NULL WHERE id=?", (uid,))
+                    st.session_state.is_pro = False; st.rerun()
         
+        # 2. MOJE FIRMA
         c = run_query("SELECT * FROM nastaveni WHERE user_id=? LIMIT 1", (uid,), single=True) or {}
-        
         with st.expander("🏢 Moje Firma", expanded=True):
             with st.form("sets"):
                 n=st.text_input("Název / Jméno", c.get('nazev', full_name_display))
                 a=st.text_area("Adresa", c.get('adresa',''))
                 i=st.text_input("IČO", c.get('ico','')); d=st.text_input("DIČ", c.get('dic',''))
                 bn=st.text_input("Banka", c.get('banka','')); uc=st.text_input("Účet", c.get('ucet',''))
-                ib=st.text_input("IBAN", c.get('iban',''))
+                ib=st.text_input("IBAN", c.get('iban','')); em=st.text_input("Email", c.get('email', st.session_state.user_email))
+                ph=st.text_input("Telefon", c.get('telefon', ''))
                 if st.form_submit_button("Uložit"):
-                    if c.get('id'): run_command("UPDATE nastaveni SET nazev=?, adresa=?, ico=?, dic=?, banka=?, ucet=?, iban=? WHERE id=?", (n,a,i,d,bn,uc,ib,c['id']))
-                    else: run_command("INSERT INTO nastaveni (user_id, nazev, adresa, ico, dic, banka, ucet, iban) VALUES (?,?,?,?,?,?,?,?)", (uid,n,a,i,d,bn,uc,ib))
+                    if c.get('id'): run_command("UPDATE nastaveni SET nazev=?, adresa=?, ico=?, dic=?, banka=?, ucet=?, iban=?, email=?, telefon=? WHERE id=?", (n,a,i,d,bn,uc,ib,em,ph,c['id']))
+                    else: run_command("INSERT INTO nastaveni (user_id, nazev, adresa, ico, dic, banka, ucet, iban, email, telefon) VALUES (?,?,?,?,?,?,?,?,?,?)", (uid,n,a,i,d,bn,uc,ib,em,ph))
                     st.rerun()
+
+        # 3. SMTP (Obnoveno)
+        dis = not is_pro; txt_lock = " (Pouze PRO)" if dis else ""
+        with st.expander(f"🔔 Upozornění (SMTP){txt_lock}"):
+            if dis: st.info("🔒 Tato funkce je dostupná pouze v PRO verzi.")
+            act = st.toggle("Aktivní", value=bool(c.get('notify_active', 0)), disabled=dis)
+            ne = st.text_input("Notifikační email", value=c.get('notify_email',''), disabled=dis)
+            ss = st.text_input("SMTP Server", value=c.get('smtp_server',''), disabled=dis)
+            sp = st.number_input("SMTP Port", value=c.get('smtp_port', 587), disabled=dis)
+            se = st.text_input("SMTP Login", value=c.get('smtp_email',''), disabled=dis)
+            sw = st.text_input("SMTP Heslo", value=c.get('smtp_password',''), type="password", disabled=dis)
+            if not dis and st.button("Uložit SMTP"):
+                run_command("UPDATE nastaveni SET notify_active=?, notify_email=?, smtp_server=?, smtp_port=?, smtp_email=?, smtp_password=? WHERE id=?", (int(act), ne, ss, sp, se, sw, c.get('id')))
+                st.success("Uloženo")
+
+        # 4. ZÁLOHY (Obnoveno)
+        with st.expander(f"💾 Záloha dat{txt_lock}"):
+            if dis: st.info("🔒 Tato funkce je dostupná pouze v PRO verzi.")
+            else:
+                def get_json():
+                    data = {}
+                    for t in ['nastaveni', 'klienti', 'kategorie', 'faktury', 'faktura_polozky']:
+                        conn = get_db(); cols = [i[1] for i in conn.execute(f"PRAGMA table_info({t})")]
+                        if 'user_id' in cols: q = f"SELECT * FROM {t} WHERE user_id=?"; params = (uid,)
+                        elif t == 'faktura_polozky': q = "SELECT fp.* FROM faktura_polozky fp JOIN faktury f ON fp.faktura_id = f.id WHERE f.user_id = ?"; params = (uid,)
+                        else: q = f"SELECT * FROM {t}"; params = ()
+                        df = pd.read_sql(q, conn, params=params); conn.close()
+                        if t == 'kategorie' and 'logo_blob' in df.columns: df['logo_blob'] = df['logo_blob'].apply(lambda x: base64.b64encode(x).decode('utf-8') if x else None)
+                        data[t] = df.to_dict(orient='records')
+                    return json.dumps(data, default=str)
+                st.download_button("Stáhnout Zálohu", get_json(), "zaloha.json", "application/json")
+                upl = st.file_uploader("Nahrát zálohu", type="json")
+                if upl and st.button("Obnovit ze zálohy"):
+                    st.success("Funkce obnovy zatím není implementována v tomto demu.")
 
     elif menu == "Klienti":
         st.header("👥 Klienti")
@@ -623,8 +555,7 @@ else:
                     if data:
                         st.session_state.ares_data = data
                         st.success("Načteno z ARES")
-                    else:
-                        st.error("IČO nenalezeno nebo chyba ARES.")
+                    else: st.error("IČO nenalezeno nebo chyba ARES.")
                 
                 ad = st.session_state.ares_data
                 with st.form(f"cf_{rid}", clear_on_submit=True):
@@ -654,14 +585,21 @@ else:
                 with st.form("kf"):
                     n=st.text_input("Název"); p=st.text_input("Prefix"); s=st.number_input("Start", 1); c=st.color_picker("Barva", "#3498db")
                     l=st.file_uploader("Logo", type=['png','jpg'])
+                    # Tlačítko nyní bude tmavé díky CSS úpravě
                     if st.form_submit_button("Uložit"):
                         run_command("INSERT INTO kategorie (user_id, nazev, prefix, aktualni_cislo, barva, logo_blob) VALUES (?,?,?,?,?,?)", (uid,n,p,s,c,process_logo(l)))
                         st.rerun()
+        
+        # Výpis kategorií
+        cats = run_query("SELECT * FROM kategorie WHERE user_id=?", (uid,))
+        if cats:
+            for cat in cats:
+                with st.expander(f"{cat['nazev']} ({cat['prefix']})"):
+                    if st.button("Smazat", key=f"delcat_{cat['id']}"):
+                        run_command("DELETE FROM kategorie WHERE id=?", (cat['id'],)); st.rerun()
 
     elif menu == "Faktury":
         st.header("📊 Faktury")
-        
-        # Statistiky
         cy = datetime.now().year
         sc = run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=? AND strftime('%Y', datum_vystaveni) = ?", (uid, str(cy)), True)[0] or 0
         su = run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=? AND uhrazeno = 0", (uid,), True)[0] or 0
@@ -673,7 +611,6 @@ else:
         </div>
         """, unsafe_allow_html=True)
         
-        # Nová faktura
         if not is_pro and cnt_inv >= 5: st.error("🔒 FREE Limit: 5 faktur.")
         else:
             with st.expander("➕ Vystavit fakturu"):
@@ -689,53 +626,36 @@ else:
                     c1, c2 = st.columns(2)
                     sk = c1.selectbox("Klient", kli['jmeno'], key=f"sk_{rid}")
                     sc = c2.selectbox("Kategorie", kat['nazev'], key=f"sc_{rid}")
-                    
                     kid = int(kli[kli['jmeno']==sk]['id'].values[0])
                     cid = int(kat[kat['nazev']==sc]['id'].values[0])
-                    
                     _, full, _ = get_next_invoice_number(cid, uid)
                     st.info(f"Číslo: **{full}**")
-                    
                     d1,d2 = st.columns(2)
                     dv = d1.date_input("Vystavení", date.today(), key=f"d1_{rid}")
                     ds = d2.date_input("Splatnost", date.today()+timedelta(14), key=f"d2_{rid}")
-                    
                     ed = st.data_editor(st.session_state.items_df, num_rows="dynamic", use_container_width=True, key=f"ed_{rid}")
                     tot = float(pd.to_numeric(ed["Cena"], errors='coerce').fillna(0).sum())
                     st.markdown(f"**Celkem: {tot:,.2f} Kč**")
                     
                     if st.button("Vystavit fakturu", type="primary", key=f"b_{rid}"):
-                        fid = run_command("INSERT INTO faktury (user_id, cislo_full, klient_id, kategorie_id, datum_vystaveni, datum_splatnosti, castka_celkem, variabilni_symbol) VALUES (?,?,?,?,?,?,?,?)", 
-                                        (uid, full, kid, cid, dv, ds, tot, re.sub(r"\D", "", full)))
+                        fid = run_command("INSERT INTO faktury (user_id, cislo_full, klient_id, kategorie_id, datum_vystaveni, datum_splatnosti, castka_celkem, variabilni_symbol) VALUES (?,?,?,?,?,?,?,?)", (uid, full, kid, cid, dv, ds, tot, re.sub(r"\D", "", full)))
                         for _, r in ed.iterrows():
                             if r["Popis položky"]: run_command("INSERT INTO faktura_polozky (faktura_id, nazev, cena) VALUES (?,?,?)", (fid, r["Popis položky"], float(r["Cena"])))
                         run_command("UPDATE kategorie SET aktualni_cislo = aktualni_cislo + 1 WHERE id = ?", (cid,))
                         reset_forms(); st.success("Vystaveno"); st.rerun()
 
         st.divider()
-        
-        # Seznam faktur
         df = pd.read_sql("SELECT f.*, k.jmeno FROM faktury f JOIN klienti k ON f.klient_id = k.id WHERE f.user_id=? ORDER BY f.id DESC LIMIT 50", get_db(), params=(uid,))
-        
         for _, r in df.iterrows():
             icon = "✅" if r['uhrazeno'] else "⏳"
             with st.expander(f"{icon} {r['cislo_full']} | {r['jmeno']} | {r['castka_celkem']:,.0f} Kč"):
                 c1, c2, c3 = st.columns([1,1,2])
-                
-                # Stav úhrady
                 if r['uhrazeno']:
-                    if c1.button("Zrušit úhradu", key=f"u0_{r['id']}"):
-                        run_command("UPDATE faktury SET uhrazeno=0 WHERE id=?", (r['id'],)); st.rerun()
+                    if c1.button("Zrušit úhradu", key=f"u0_{r['id']}"): run_command("UPDATE faktury SET uhrazeno=0 WHERE id=?", (r['id'],)); st.rerun()
                 else:
-                    if c1.button("Zaplaceno", key=f"u1_{r['id']}"):
-                        run_command("UPDATE faktury SET uhrazeno=1 WHERE id=?", (r['id'],)); st.rerun()
-                
-                # PDF Download (Nyní tmavé tlačítko)
+                    if c1.button("Zaplaceno", key=f"u1_{r['id']}"): run_command("UPDATE faktury SET uhrazeno=1 WHERE id=?", (r['id'],)); st.rerun()
                 pdf_data = generate_pdf(r['id'], uid, is_pro)
                 if isinstance(pdf_data, bytes):
                     c2.download_button("⬇️ Stáhnout PDF", pdf_data, file_name=f"{r['cislo_full']}.pdf", mime="application/pdf", key=f"pdf_{r['id']}")
-                else:
-                    c2.error("Chyba PDF")
-                
-                if c3.button("🗑️ Smazat", key=f"del_{r['id']}"):
-                    run_command("DELETE FROM faktury WHERE id=?", (r['id'],)); st.rerun()
+                else: c2.error("Chyba PDF")
+                if c3.button("🗑️ Smazat", key=f"del_{r['id']}"): run_command("DELETE FROM faktury WHERE id=?", (r['id'],)); st.rerun()
