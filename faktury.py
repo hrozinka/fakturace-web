@@ -46,7 +46,6 @@ def get_db():
 def init_db():
     conn = get_db()
     c = conn.cursor()
-    # Users table needs license info
     c.execute('''CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE NOT NULL,
@@ -55,7 +54,6 @@ def init_db():
         license_valid_until TEXT,
         created_at TEXT
     )''')
-    # Settings table needs SMTP info
     c.execute('''CREATE TABLE IF NOT EXISTS nastaveni (
         id INTEGER PRIMARY KEY, user_id INTEGER, 
         nazev TEXT, adresa TEXT, ico TEXT, dic TEXT, ucet TEXT, banka TEXT, email TEXT, telefon TEXT, iban TEXT, 
@@ -66,7 +64,6 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS faktury (id INTEGER PRIMARY KEY, user_id INTEGER, cislo INTEGER, cislo_full TEXT, klient_id INTEGER, kategorie_id INTEGER, datum_vystaveni TEXT, datum_duzp TEXT, datum_splatnosti TEXT, castka_celkem REAL, zpusob_uhrady TEXT, variabilni_symbol TEXT, cislo_objednavky TEXT, uvodni_text TEXT, uhrazeno INTEGER DEFAULT 0, muj_popis TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS faktura_polozky (id INTEGER PRIMARY KEY, faktura_id INTEGER, nazev TEXT, cena REAL)''')
     
-    # Migrace sloupcu (pokud chybi)
     try: c.execute("ALTER TABLE users ADD COLUMN license_key TEXT")
     except: pass
     try: c.execute("ALTER TABLE users ADD COLUMN license_valid_until TEXT")
@@ -182,9 +179,16 @@ def generate_pdf(faktura_id, uid):
         fname = 'ArialCS' if getattr(pdf, 'font_ok', False) else 'Arial'
         pdf.set_font(fname, '', 10)
 
+        # OPRAVENA CAST ZDE:
         if data['logo_blob']:
-            try: fn = f"t_{faktura_id}.png"; with open(fn, "wb") as f: f.write(data['logo_blob']); pdf.image(fn, x=10, y=10, w=30); os.remove(fn)
+            try:
+                fn = f"t_{faktura_id}.png"
+                with open(fn, "wb") as f:
+                    f.write(data['logo_blob'])
+                pdf.image(fn, x=10, y=10, w=30)
+                os.remove(fn)
             except: pass
+
         try: c = data['barva'].lstrip('#'); r, g, b = tuple(int(c[i:i+2], 16) for i in (0, 2, 4))
         except: r,g,b=100,100,100
         pdf.set_text_color(100); pdf.set_y(40); pdf.cell(95, 5, stxt("DODAVATEL:"), 0, 0); pdf.cell(95, 5, stxt("ODBĚRATEL:"), 0, 1)
@@ -289,7 +293,7 @@ elif menu == "Nastavení":
                 st.success(f"Aktivováno! Platnost do: {exp}"); st.rerun()
             else: st.error(msg)
 
-    # Dalsi sekce jen pokud je aktivni, nebo aby videl co dostane? Nechame pristupne nastaveni vzdy.
+    # Dalsi sekce
     with st.expander("🏢 Firemní údaje"):
         with st.form("f1"):
             n=st.text_input("Název", c.get('nazev','')); a=st.text_area("Adresa", c.get('adresa',''))
@@ -305,7 +309,7 @@ elif menu == "Nastavení":
             b=st.text_input("Banka", c.get('banka','')); u=st.text_input("Účet", c.get('ucet','')); ib=st.text_input("IBAN", c.get('iban',''))
             if st.form_submit_button("Uložit"): run_command("UPDATE nastaveni SET banka=?, ucet=?, iban=? WHERE id=? AND user_id=?", (b,u,ib,c.get('id',0), uid)); st.rerun()
 
-    # VRÁCENO: Upozornění na emaily
+    # Upozornění na emaily
     with st.expander("🔔 Upozornění (SMTP)"):
         act = st.toggle("Aktivní", value=bool(c.get('notify_active', 0)))
         ne = st.text_input("Email pro notifikace", value=c.get('notify_email',''))
@@ -320,7 +324,7 @@ elif menu == "Nastavení":
             ok, m = send_email_alert("Test", "Test OK", get_my_details(uid))
             st.toast("Odesláno") if ok else st.error(m)
 
-    # VRÁCENO: Zálohování
+    # Zálohování
     with st.expander("💾 Záloha dat"):
         import pandas as pd
         def get_json():
