@@ -16,12 +16,19 @@ from email.mime.multipart import MIMEMultipart
 from PIL import Image
 
 # --- 0. NASTAVENÍ SYSTÉMU ---
+# ZMĚNA: Heslo se načítá z bezpečného úložiště (st.secrets) nebo proměnných prostředí
+# Návod: Vytvořte soubor .streamlit/secrets.toml a vložte do něj: EMAIL_PASSWORD = "VaseHeslo"
+try:
+    email_password = st.secrets["EMAIL_PASSWORD"]
+except:
+    email_password = os.getenv("EMAIL_PASSWORD", "") # Fallback, pokud secrets neexistují
+
 SYSTEM_EMAIL = {
     "enabled": True, 
     "server": "smtp.seznam.cz",
     "port": 465,
     "email": "jsem@michalkochtik.cz",
-    "password": "Miki+420"
+    "password": email_password 
 }
 
 # --- 1. KONFIGURACE A CSS ---
@@ -29,12 +36,41 @@ st.set_page_config(page_title="Fakturační Systém", page_icon="🧾", layout="
 
 st.markdown("""
     <style>
+    /* ZMĚNA: Hlavní pozadí a text */
     .stApp { background-color: #0e1117; color: #ffffff; }
+    
+    /* Vstupy (Inputy) */
     .stTextInput input, .stNumberInput input, .stTextArea textarea, .stDateInput input, .stSelectbox div[data-baseweb="select"] {
-        background-color: #262730 !important; border: 1px solid #4f4f4f !important; color: #ffffff !important;
+        background-color: #262730 !important; 
+        border: 1px solid #4f4f4f !important; 
+        color: #ffffff !important;
     }
+    
+    /* Expandery */
     div[data-testid="stExpander"] { background-color: #262730 !important; border: 1px solid #4f4f4f; border-radius: 8px; margin-bottom: 8px; }
     div[data-testid="stExpander"] details summary { color: #ffffff !important; }
+    
+    /* ZMĚNA: Oprava tlačítek (UI/UX) - aby nesvítila bíle */
+    .stButton > button {
+        background-color: #262730 !important;
+        color: #ffffff !important;
+        border: 1px solid #4f4f4f !important;
+        transition: all 0.3s ease;
+    }
+    .stButton > button:hover {
+        border-color: #eab308 !important;
+        color: #eab308 !important;
+        background-color: #1f2937 !important;
+    }
+    .stButton > button:active {
+        background-color: #111827 !important;
+    }
+    /* Primární tlačítka (např. Odeslat) */
+    div[data-testid="stForm"] button[kind="primary"], button[kind="primary"] {
+        background-color: #eab308 !important;
+        color: #000000 !important;
+        border: none !important;
+    }
     
     /* STATS BOXY */
     .mini-stat-container { display: flex; gap: 10px; margin-bottom: 20px; margin-top: 10px; justify-content: space-between; }
@@ -117,7 +153,7 @@ def run_command(sql, params=()):
 def hash_password(password): return hashlib.sha256(str.encode(password)).hexdigest()
 
 def send_welcome_email(to_email, full_name):
-    if not SYSTEM_EMAIL["enabled"]: return False
+    if not SYSTEM_EMAIL["enabled"] or not SYSTEM_EMAIL["password"]: return False
     try:
         msg = MIMEMultipart()
         msg['From'] = SYSTEM_EMAIL["email"]
@@ -134,14 +170,10 @@ def send_welcome_email(to_email, full_name):
 
 def check_license_online(key):
     try:
-        # URL vede na 'raw' verzi souboru licence.json ve vašem repozitáři
-        # timestamp (?t=...) zajišťuje, že se soubor nebude cachovat a načte se vždy aktuální verze
         url = f"https://raw.githubusercontent.com/hrozinka/fakturace-web/refs/heads/main/licence.json?t={int(datetime.now().timestamp())}"
-        
         r = requests.get(url, timeout=3)
         if r.status_code == 200:
             data = r.json()
-            # Pokud klíč existuje v JSONu, vrátíme True a datum, které je u klíče uložené
             if key in data:
                 datum_expirace = data[key]
                 return True, "Aktivní", datum_expirace
