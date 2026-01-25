@@ -20,8 +20,8 @@ SYSTEM_EMAIL = {
     "enabled": False, 
     "server": "smtp.seznam.cz",
     "port": 465,
-    "email": "vas-email@seznam.cz",
-    "password": "vase-heslo"
+    "email": "jsem@michalkochtik.cz",
+    "password": "Miki+420"
 }
 
 # --- 1. KONFIGURACE A CSS ---
@@ -407,9 +407,12 @@ else:
         else: 
             st.success("✅ PRO Verze aktivní")
             with st.expander("🔑 Správa licence"):
-                # Načtení aktuálního klíče uživatele
-                u_data = run_query("SELECT license_key FROM users WHERE id=?", (uid,), single=True)
+                # Načtení aktuálního klíče a data platnosti
+                u_data = run_query("SELECT license_key, license_valid_until FROM users WHERE id=?", (uid,), single=True)
                 cur_k = u_data['license_key'] if u_data else ""
+                valid_until = u_data['license_valid_until'] if u_data and u_data['license_valid_until'] else "Neznámo"
+                
+                st.info(f"📅 Platnost do: **{format_date(valid_until)}**")
                 
                 new_k = st.text_input("Změnit klíč", value=cur_k)
                 
@@ -431,7 +434,7 @@ else:
         def_e = c.get('email', st.session_state.user_email)
         def_p = c.get('telefon', st.session_state.user_phone)
 
-        with st.expander("🏢 Moje Firma", expanded=True):
+        with st.expander("🏢 Moje Firma", expanded=False):
             with st.form("sets"):
                 n=st.text_input("Název / Jméno", def_n); a=st.text_area("Adresa", c.get('adresa',''))
                 i=st.text_input("IČO", c.get('ico','')); d=st.text_input("DIČ", c.get('dic',''))
@@ -494,7 +497,6 @@ else:
         
         for r in run_query("SELECT * FROM klienti WHERE user_id=?", (uid,)):
             with st.expander(r['jmeno']):
-                # OPRAVA CHYBY ZDE:
                 if r['poznamka']: st.info(f"ℹ️ {r['poznamka']}")
                 
                 # UPDATE CLIENT
@@ -559,7 +561,7 @@ else:
         st.markdown(f"""
         <div class="mini-stat-container">
             <div class="mini-stat-box"><div class="mini-label">Fakturováno {cy} (VŠE)</div><div class="mini-val-green">{sc_all:,.0f} Kč</div></div>
-            <div class="mini-stat-box"><div class="mini-label">Celkem Historie (VŠE)</div><div class="mini-val-gray">{sh_all:,.0f} Kč</div></div>
+            <div class="mini-stat-box"><div class="mini-label">Celkem Historie (VŠE)</div><div class="mini-val-gray">{sh:,.0f} Kč</div></div>
             <div class="mini-stat-box"><div class="mini-label">Neuhrazeno (VŠE)</div><div class="mini-val-red">{su_all:,.0f} Kč</div></div>
         </div>
         """, unsafe_allow_html=True)
