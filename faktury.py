@@ -17,11 +17,11 @@ from PIL import Image
 
 # --- 0. NASTAVENÍ SYSTÉMU ---
 SYSTEM_EMAIL = {
-    "enabled": False, 
+    "enabled": True, 
     "server": "smtp.seznam.cz",
     "port": 465,
-    "email": "vas-email@seznam.cz",
-    "password": "vase-heslo"
+    "email": "jsem@michalkochtik.cz",
+    "password": "Miki+420"
 }
 
 # --- 1. KONFIGURACE A CSS ---
@@ -72,8 +72,15 @@ def init_db():
         license_key TEXT,
         license_valid_until TEXT,
         role TEXT DEFAULT 'user',
-        created_at TEXT
+        created_at TEXT,
+        last_active TEXT
     )''')
+    
+    # Migrace pro existující DB (pokud sloupec neexistuje)
+    try:
+        c.execute("ALTER TABLE users ADD COLUMN last_active TEXT")
+    except:
+        pass
     
     c.execute('''CREATE TABLE IF NOT EXISTS nastaveni (id INTEGER PRIMARY KEY, user_id INTEGER, nazev TEXT, adresa TEXT, ico TEXT, dic TEXT, ucet TEXT, banka TEXT, email TEXT, telefon TEXT, iban TEXT, smtp_server TEXT, smtp_port INTEGER, smtp_email TEXT, smtp_password TEXT, notify_email TEXT, notify_days INTEGER, notify_active INTEGER)''')
     c.execute('''CREATE TABLE IF NOT EXISTS klienti (id INTEGER PRIMARY KEY, user_id INTEGER, jmeno TEXT, adresa TEXT, ico TEXT, dic TEXT, email TEXT)''')
@@ -273,6 +280,9 @@ if not st.session_state.user_id:
                     st.session_state.user_email = res['email']
                     st.session_state.user_phone = res['phone']
                     st.session_state.is_pro = True if res['license_key'] else False
+                    
+                    # Update Last Active
+                    run_command("UPDATE users SET last_active = ? WHERE id = ?", (datetime.now().isoformat(), res['id']))
                     st.rerun()
                 else: st.error("Neplatné údaje.")
 
@@ -293,8 +303,8 @@ if not st.session_state.user_id:
                 else:
                     try:
                         fullname = f"{fn} {ln}".strip()
-                        run_command("INSERT INTO users (username, password_hash, full_name, email, phone, created_at) VALUES (?, ?, ?, ?, ?, ?)", 
-                                   (usr, hash_password(p1), fullname, mail, tel, datetime.now().isoformat()))
+                        run_command("INSERT INTO users (username, password_hash, full_name, email, phone, created_at, last_active) VALUES (?, ?, ?, ?, ?, ?, ?)", 
+                                   (usr, hash_password(p1), fullname, mail, tel, datetime.now().isoformat(), datetime.now().isoformat()))
                         send_welcome_email(mail, fullname)
                         st.success("Účet vytvořen! Přepněte na záložku Přihlášení.")
                     except: st.error("Uživatel již existuje.")
@@ -305,6 +315,9 @@ uid = st.session_state.user_id
 role = st.session_state.role
 is_pro = st.session_state.is_pro
 full_name_display = st.session_state.full_name if st.session_state.full_name else st.session_state.username
+
+# Sledování aktivity při každém načtení (nejen při loginu)
+run_command("UPDATE users SET last_active = ? WHERE id = ?", (datetime.now().isoformat(), uid))
 
 st.sidebar.markdown(f"👤 **{full_name_display}**")
 st.sidebar.caption(f"{'👑 ADMIN' if role=='admin' else ('⭐ PRO Verze' if is_pro else '🆓 FREE Verze')}")
@@ -321,7 +334,37 @@ if role == 'admin':
     with tabs[0]:
         users = run_query("SELECT * FROM users WHERE role != 'admin'")
         for u in users:
-            with st.expander(f"{u['full_name']} | {u['username']}"):
+            # --- VÝPOČET LABELU ---
+            label = "🔴"
+            if u['last_active']:
+                try:
+                    last = datetime.fromisoformat(u['last_active'])
+                    diff = datetime.now() - last
+                    minutes = diff.total_seconds() / 60
+                    
+                    if minutes <= 30:
+                        label = "🟢 ON"
+                    elif minutes < 60:
+                        label = "0H"
+                    else:
+                        hours = minutes / 60
+                        if hours < 24:
+                            label = f"{int(hours)}H"
+                        else:
+                            days = hours / 24
+                            if days < 30:
+                                label = f"{int(days)}D"
+                            else:
+                                months = days / 30
+                                if months < 12:
+                                    label = f"{int(months)}M"
+                                else:
+                                    years = days / 365
+                                    label = f"{int(years)}R"
+                except:
+                    label = "?"
+
+            with st.expander(f"{label} | {u['full_name']} | {u['username']}"):
                 c1, c2 = st.columns(2)
                 c1.write(f"**Email:** {u['email']}")
                 c1.write(f"**Telefon:** {u['phone']}")
