@@ -15,7 +15,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from PIL import Image
 
-# --- 1. KONFIGURACE A CSS (TMAVÝ REŽIM) ---
+# --- 1. KONFIGURACE A CSS ---
 st.set_page_config(page_title="Fakturační Systém Online", page_icon="🧾", layout="centered")
 
 st.markdown("""
@@ -179,7 +179,6 @@ def generate_pdf(faktura_id, uid):
         fname = 'ArialCS' if getattr(pdf, 'font_ok', False) else 'Arial'
         pdf.set_font(fname, '', 10)
 
-        # OPRAVENA CAST ZDE:
         if data['logo_blob']:
             try:
                 fn = f"t_{faktura_id}.png"
@@ -324,47 +323,81 @@ elif menu == "Nastavení":
             ok, m = send_email_alert("Test", "Test OK", get_my_details(uid))
             st.toast("Odesláno") if ok else st.error(m)
 
-    # Zálohování
+    # Zálohování (BEZPEČNÁ VERZE)
     with st.expander("💾 Záloha dat"):
         import pandas as pd
         def get_json():
             data = {}
             for t in ['nastaveni', 'klienti', 'kategorie', 'faktury', 'faktura_polozky']:
                 # DULEZITE: Export jen pro aktualniho uzivatele
-                q = f"SELECT * FROM {t} WHERE user_id=?" if 'user_id' in [i[1] for i in get_db().execute(f"PRAGMA table_info({t})")] else f"SELECT * FROM {t}"
-                if t == 'faktura_polozky': # Polozky nemaji user_id, filtrujeme pres faktury
-                    q = "SELECT fp.* FROM faktura_polozky fp JOIN faktury f ON fp.faktura_id = f.id WHERE f.user_id = ?"
+                conn = get_db()
+                cols = [i[1] for i in conn.execute(f"PRAGMA table_info({t})")]
                 
-                df = pd.read_sql(q, get_db(), params=(uid,))
-                if t == 'kategorie' and 'logo_blob' in df.columns: df['logo_blob'] = df['logo_blob'].apply(lambda x: base64.b64encode(x).decode('utf-8') if x else None)
+                if 'user_id' in cols:
+                    q = f"SELECT * FROM {t} WHERE user_id=?"
+                    params = (uid,)
+                elif t == 'faktura_polozky': # Polozky nemaji user_id, filtrujeme pres faktury
+                    q = "SELECT fp.* FROM faktura_polozky fp JOIN faktury f ON fp.faktura_id = f.id WHERE f.user_id = ?"
+                    params = (uid,)
+                else:
+                    q = f"SELECT * FROM {t}"
+                    params = ()
+                
+                df = pd.read_sql(q, conn, params=params)
+                conn.close()
+                
+                if t == 'kategorie' and 'logo_blob' in df.columns: 
+                    df['logo_blob'] = df['logo_blob'].apply(lambda x: base64.b64encode(x).decode('utf-8') if x else None)
                 data[t] = df.to_dict(orient='records')
             return json.dumps(data, default=str)
         
         st.download_button("Stáhnout Mojí Zálohu", get_json(), f"zaloha_{st.session_state.username}.json", "application/json")
         upl = st.file_uploader("Obnovit ze zálohy", type="json")
-        if upl and st.button("Nahrát data"):
-            d = json.load(upl)
-            conn = get_db(); cur = conn.cursor()
-            # Smazat stavajici data uzivatele
-            cur.execute("DELETE FROM faktura_polozky WHERE faktura_id IN (SELECT id FROM faktury WHERE user_id=?)", (uid,))
-            cur.execute("DELETE FROM faktury WHERE user_id=?", (uid,))
-            cur.execute("DELETE FROM klienti WHERE user_id=?", (uid,))
-            cur.execute("DELETE FROM kategorie WHERE user_id=?", (uid,))
-            cur.execute("DELETE FROM nastaveni WHERE user_id=?", (uid,))
-            
-            # Import (vynutit user_id)
-            for t, rows in d.items():
-                if not rows: continue
-                if t == 'faktura_polozky': # Polozky nemaji user_id
-                    for r in rows: cur.execute("INSERT INTO faktura_polozky (faktura_id, nazev, cena) VALUES (?,?,?)", (r['faktura_id'], r['nazev'], r['cena']))
-                elif t in ['nastaveni', 'klienti', 'kategorie', 'faktury']:
+        
+        if upl and st.button("⚠️ Přepsat data ze zálohy"):
+            try:
+                d = json.load(upl)
+                conn = get_db()
+                cur = conn.cursor()
+                
+                # 1. Vymazat stavajici data uzivatele
+                cur.execute("DELETE FROM faktura_polozky WHERE faktura_id IN (SELECT id FROM faktury WHERE user_id=?)", (uid,))
+                cur.execute("DELETE FROM faktury WHERE user_id=?", (uid,))
+                cur.execute("DELETE FROM klienti WHERE user_id=?", (uid,))
+                cur.execute("DELETE FROM kategorie WHERE user_id=?", (uid,))
+                cur.execute("DELETE FROM nastaveni WHERE user_id=?", (uid,))
+                
+                # 2. Vložit nová data
+                for t, rows in d.items():
+                    if not rows: continue
+                    
+                    # Ziskat sloupce z DB, abychom nevkladali neco co neexistuje
+                    db_cols = [row[1] for row in cur.execute(f"PRAGMA table_info({t})")]
+                    
                     for r in rows:
-                        r['user_id'] = uid # Vynutit moje ID
-                        if t == 'kategorie' and r.get('logo_blob'): r['logo_blob'] = base64.b64decode(r['logo_blob'])
-                        qs = f"INSERT INTO {t} ({','.join(r.keys())}) VALUES ({','.join(['?']*len(r))})"
-                        cur.execute(qs, list(r.values()))
-            conn.commit(); conn.close()
-            st.success("Data obnovena!"); st.rerun()
+                        # Priprava radku - filtrace klicu
+                        valid_r = {k: v for k, v in r.items() if k in db_cols}
+                        
+                        # Vynuceni user_id (pokud tabulka ma mit user_id)
+                        if 'user_id' in db_cols:
+                            valid_r['user_id'] = uid
+                            
+                        # Specialni handling pro logo
+                        if t == 'kategorie' and 'logo_blob' in valid_r and valid_r['logo_blob']:
+                            valid_r['logo_blob'] = base64.b64decode(valid_r['logo_blob'])
+                            
+                        # Sestaveni SQL query
+                        columns = ', '.join(valid_r.keys())
+                        placeholders = ', '.join(['?'] * len(valid_r))
+                        sql = f"INSERT INTO {t} ({columns}) VALUES ({placeholders})"
+                        cur.execute(sql, list(valid_r.values()))
+                        
+                conn.commit()
+                conn.close()
+                st.success("Data byla úspěšně obnovena!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Chyba při obnově: {str(e)}")
 
 elif menu == "Klienti" and is_active:
     st.header("👥 Klienti")
