@@ -31,15 +31,15 @@ SYSTEM_EMAIL = {
 
 DB_FILE = 'fakturace_v11_pro.db'
 
-# --- 1. DESIGN A UI/UX (CSS MAGIC) ---
+# --- 1. DESIGN A UI/UX (CSS UPRAVENO) ---
 st.set_page_config(page_title="Fakturační Systém", page_icon="🧾", layout="centered")
 
 st.markdown("""
     <style>
-    /* === GLOBÁLNÍ RESET A POZADÍ === */
+    /* === GLOBÁLNÍ RESET === */
     .stApp { background-color: #111827; color: #f3f4f6; font-family: 'Segoe UI', sans-serif; }
     
-    /* === DESIGN VSTUPNÍCH POLÍ === */
+    /* === VSTUPNÍ POLE === */
     .stTextInput input, .stNumberInput input, .stTextArea textarea, .stDateInput input, 
     .stSelectbox div[data-baseweb="select"] {
         background-color: #1f2937 !important; 
@@ -48,118 +48,75 @@ st.markdown("""
         border-radius: 10px !important;
         padding: 10px !important;
     }
-    .stTextInput input:focus, .stTextArea textarea:focus {
-        border-color: #eab308 !important; /* Zlatý focus */
-        box-shadow: 0 0 0 1px #eab308 !important;
-    }
 
-    /* === MODERNI MENU (PRESTYLOVANE RADIO BUTTONY) === */
-    /* Skryjeme standardní kroužky */
+    /* === OPRAVENÉ MENU (STEJNÁ DÉLKA + ČITELNOST) === */
+    /* 1. Skryjeme původní puntíky */
     section[data-testid="stSidebar"] .stRadio div[role="radiogroup"] > label > div:first-child {
         display: none !important;
     }
     
-    /* Styl pro blok menu */
+    /* 2. Styl pro samotný box (tlačítko) */
     section[data-testid="stSidebar"] .stRadio label {
+        width: 100% !important;             /* Roztáhnout na celou šířku */
+        display: flex !important;           /* Flexbox pro zarovnání */
+        justify-content: center !important; /* Text uprostřed */
+        align-items: center !important;
         background-color: #1f2937 !important;
-        padding: 15px 20px !important;
-        margin-bottom: 8px !important;
+        padding: 16px 10px !important;      /* Větší padding pro lepší klikání */
+        margin-bottom: 10px !important;
         border-radius: 12px !important;
         border: 1px solid #374151 !important;
         cursor: pointer;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        font-weight: 600 !important;
-        color: #9ca3af !important;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        font-size: 16px !important;         /* Větší písmo pro čitelnost */
+        font-weight: 600 !important;        /* Tučnější text */
+        color: #e5e7eb !important;          /* Jasná barva textu */
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        box-sizing: border-box !important;  /* Aby padding nezvětšoval šířku přes okraj */
     }
     
-    /* Hover efekt */
+    /* 3. Hover efekt (najetí myší) */
     section[data-testid="stSidebar"] .stRadio label:hover {
         background-color: #374151 !important;
+        border-color: #eab308 !important;
         color: #eab308 !important;
-        transform: translateY(-2px);
     }
 
-    /* Aktivní položka (vybraná) - Zlatá */
+    /* 4. Aktivní položka (vybraná) - Zlatá s černým textem (vysoký kontrast) */
     section[data-testid="stSidebar"] .stRadio label[data-checked="true"] {
         background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%) !important;
-        color: #000000 !important;
+        color: #111827 !important;          /* Tmavý text na zlatém pozadí = čitelné */
         border: none !important;
-        box-shadow: 0 10px 15px -3px rgba(234, 179, 8, 0.3);
+        box-shadow: 0 4px 12px rgba(234, 179, 8, 0.4);
     }
 
-    /* === LOGIN KARTA (Centrovany box) === */
+    /* === LOGIN KARTA === */
     .login-container {
-        background-color: #1f2937;
-        padding: 40px;
-        border-radius: 20px;
-        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
-        border: 1px solid #374151;
-        text-align: center;
-        margin-top: 50px;
+        background-color: #1f2937; padding: 40px; border-radius: 20px;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3); border: 1px solid #374151;
+        text-align: center; margin-top: 50px;
     }
-    .login-header {
-        font-size: 28px;
-        font-weight: 800;
-        color: #eab308;
-        margin-bottom: 10px;
-        text-transform: uppercase;
-        letter-spacing: 2px;
-    }
+    .login-header { font-size: 28px; font-weight: 800; color: #eab308; margin-bottom: 10px; text-transform: uppercase; }
     .login-sub { color: #9ca3af; margin-bottom: 30px; font-size: 14px; }
 
     /* === TLAČÍTKA === */
     .stButton > button {
-        background-color: #1f2937 !important;
-        color: #e5e7eb !important;
-        border: 1px solid #374151 !important;
-        border-radius: 8px;
-        padding: 0.5rem 1rem;
-        transition: all 0.2s;
-        font-weight: 600;
+        background-color: #1f2937 !important; color: #e5e7eb !important;
+        border: 1px solid #374151 !important; border-radius: 8px; width: 100%;
     }
-    .stButton > button:hover {
-        border-color: #eab308 !important;
-        color: #eab308 !important;
-    }
-    /* Primární tlačítka (Login, Uložit) */
+    .stButton > button:hover { border-color: #eab308 !important; color: #eab308 !important; }
     div[data-testid="stForm"] button[kind="primary"], button[kind="primary"] {
         background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%) !important;
-        color: #111827 !important;
-        border: none !important;
-        box-shadow: 0 4px 6px rgba(234, 179, 8, 0.2);
-    }
-    div[data-testid="stForm"] button[kind="primary"]:hover {
-        box-shadow: 0 10px 15px rgba(234, 179, 8, 0.4);
-        transform: translateY(-1px);
+        color: #111827 !important; border: none !important;
     }
 
     /* === STATISTIKY === */
     .mini-stat-container { display: flex; gap: 15px; margin-bottom: 25px; }
-    .mini-stat-box { 
-        background: #1f2937; 
-        border-radius: 12px; 
-        padding: 20px; 
-        flex: 1; 
-        text-align: center; 
-        border: 1px solid #374151;
-        transition: transform 0.2s;
-    }
-    .mini-stat-box:hover { transform: translateY(-3px); border-color: #eab308; }
-    
-    .mini-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #9ca3af; margin-bottom: 5px; }
+    .mini-stat-box { background: #1f2937; border-radius: 12px; padding: 20px; flex: 1; text-align: center; border: 1px solid #374151; }
     .mini-val-green { font-size: 26px; font-weight: 800; color: #34d399; }
     .mini-val-red { font-size: 26px; font-weight: 800; color: #f87171; }
     
-    /* === EXPENDERY === */
-    div[data-testid="stExpander"] {
-        background-color: #1f2937 !important;
-        border: 1px solid #374151 !important;
-        border-radius: 12px !important;
-    }
+    /* === EXPANDERY === */
+    div[data-testid="stExpander"] { background-color: #1f2937 !important; border: 1px solid #374151 !important; border-radius: 12px !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -232,26 +189,22 @@ def get_next_invoice_number(kat_id, uid):
     if res: return (res['aktualni_cislo'], str(res['aktualni_cislo']), res['prefix'])
     return (1, "1", "")
 
-# --- 4. ARES API (ROBUSTNÍ VERZE) ---
+# --- 4. ARES API ---
 def get_ares_data(ico):
     import urllib3
     urllib3.disable_warnings()
     if not ico: return None
-    
-    # Čištění IČO
     ico_clean = "".join(filter(str.isdigit, str(ico)))
     if len(ico_clean) == 0: return None
     ico_final = ico_clean.zfill(8)
     
     try:
         url = f"https://ares.gov.cz/ekonomicke-subjekty/v-1/ekonomicke-subjekty/{ico_final}"
-        # NUTNÉ: Hlavičky pro identifikaci prohlížeče
         headers = {"accept": "application/json", "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36"}
         r = requests.get(url, headers=headers, verify=False, timeout=5)
         
         if r.status_code == 200:
             d = r.json(); s = d.get('sidlo', {})
-            # Pokus o načtení textové adresy, jinak složení
             text_adresa = s.get('textovaAdresa', '')
             if not text_adresa:
                 ulice = s.get('nazevUlice', ''); cislo = f"{s.get('cisloDomovni','')}/{s.get('cisloOrientacni','')}".strip('/')
@@ -369,9 +322,7 @@ def reset_forms():
 
 # --- 8. LOGIN / AUTH (UPRAVENÝ DESIGN) ---
 if not st.session_state.user_id:
-    # Využijeme sloupce pro centrování
     col1, col2, col3 = st.columns([1, 2, 1])
-    
     with col2:
         st.markdown("""
         <div class="login-container">
@@ -382,7 +333,6 @@ if not st.session_state.user_id:
         """, unsafe_allow_html=True)
         
         tab_login, tab_reg = st.tabs(["🔐 Přihlášení", "📝 Registrace"])
-        
         with tab_login:
             st.markdown("<br>", unsafe_allow_html=True)
             with st.form("login_form"):
@@ -441,7 +391,7 @@ if role == 'admin':
 
 # --- USER ---
 else:
-    # Hlavní menu - POUŽITÍ EMOJI PRO HEZKÝ VZHLED V BLOCÍCH
+    # Hlavní menu
     menu = st.sidebar.radio(" ", ["📊 Faktury", "👥 Klienti", "🏷️ Kategorie", "⚙️ Nastavení"])
     
     cnt_cli = run_query("SELECT COUNT(*) FROM klienti WHERE user_id=?", (uid,), single=True)[0]
