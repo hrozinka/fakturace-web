@@ -16,7 +16,6 @@ from email.mime.multipart import MIMEMultipart
 from PIL import Image
 
 # --- 0. NASTAVENÍ SYSTÉMU ---
-# Zabezpečení hesla (zachováno z minulé úpravy)
 try:
     email_password = st.secrets["EMAIL_PASSWORD"]
 except:
@@ -30,16 +29,15 @@ SYSTEM_EMAIL = {
     "password": email_password 
 }
 
-# --- 1. KONFIGURACE A CSS (UPRAVENO PRO RESPONZIVITU A TMAVÁ TLAČÍTKA) ---
-# ZMĚNA: layout="wide" pro lepší využití místa na velkých obrazovkách
+# --- 1. KONFIGURACE A CSS ---
 st.set_page_config(page_title="Fakturační Systém", page_icon="🧾", layout="wide")
 
 st.markdown("""
     <style>
-    /* HLAVNÍ POZADÍ */
-    .stApp { background-color: #0e1117; color: #ffffff; }
+    /* 1. HLAVNÍ BARVY A POZADÍ */
+    .stApp { background-color: #0e1117; color: #e5e7eb; }
     
-    /* VSTUPNÍ POLE - PLNĚ TMAVÁ */
+    /* 2. VSTUPNÍ POLE - Jednotný tmavý vzhled */
     .stTextInput input, .stNumberInput input, .stTextArea textarea, .stDateInput input, 
     .stSelectbox div[data-baseweb="select"] {
         background-color: #1f2937 !important; 
@@ -47,72 +45,77 @@ st.markdown("""
         color: #e5e7eb !important;
         border-radius: 6px;
     }
-    .stTextInput input:focus, .stTextArea textarea:focus {
-        border-color: #eab308 !important;
-    }
     
-    /* EXPANDERY */
-    div[data-testid="stExpander"] { 
-        background-color: #1f2937 !important; 
-        border: 1px solid #374151; 
-        border-radius: 8px; 
-        margin-bottom: 8px; 
+    /* 3. OPRAVA EXPANDERU (Aby nebyl světlý po rozbalení) */
+    div[data-testid="stExpander"] {
+        background-color: #1f2937 !important;
+        border: 1px solid #374151 !important;
+        border-radius: 8px;
+        color: #e5e7eb !important;
     }
-    div[data-testid="stExpander"] details summary { color: #e5e7eb !important; }
-    
-    /* --- ZMĚNA: TMAVÁ TLAČÍTKA (Sjednocený design) --- */
+    div[data-testid="stExpander"] details {
+        background-color: #1f2937 !important;
+        color: #e5e7eb !important;
+    }
+    div[data-testid="stExpander"] details summary {
+        color: #e5e7eb !important;
+    }
+    div[data-testid="stExpander"] > details > div {
+        color: #e5e7eb !important;
+    }
+
+    /* 4. TLAČÍTKA - Tmavá s efektem */
     .stButton > button {
-        background-color: #1f2937 !important;  /* Tmavé pozadí */
-        color: #e5e7eb !important;            /* Světlý text */
-        border: 1px solid #374151 !important; /* Jemný okraj */
+        background-color: #1f2937 !important;
+        color: #e5e7eb !important;
+        border: 1px solid #374151 !important;
         border-radius: 6px;
         transition: all 0.2s ease-in-out;
-        width: 100%; /* Na mobilu lepší pro klikání */
+        width: 100%;
     }
     .stButton > button:hover {
-        border-color: #eab308 !important;     /* Zlatý okraj při najetí */
+        border-color: #eab308 !important;
         color: #eab308 !important;
-        background-color: #111827 !important; /* Ještě tmavší pozadí */
-    }
-    .stButton > button:active {
-        background-color: #000000 !important;
+        background-color: #111827 !important;
     }
     
-    /* PRIMÁRNÍ TLAČÍTKA (např. Vystavit, Uložit) - Zlatá */
+    /* Primární tlačítka (Vystavit, Uložit) */
     div[data-testid="stForm"] button[kind="primary"], button[kind="primary"] {
         background-color: #eab308 !important;
         color: #000000 !important;
         border: none !important;
         font-weight: bold !important;
     }
-    div[data-testid="stForm"] button[kind="primary"]:hover {
-        background-color: #ca8a04 !important;
-    }
 
-    /* --- ZMĚNA: RESPONZIVNÍ STATISTIKY (Flexbox + Media Queries) --- */
+    /* 5. STATISTIKY - RESPONSIVNÍ ROZLOŽENÍ */
     .mini-stat-container { 
         display: flex; 
         gap: 15px; 
         margin-bottom: 20px; 
         margin-top: 10px; 
         justify-content: space-between; 
-        flex-wrap: wrap; /* Důležité: zalomení na mobilu */
+        flex-wrap: wrap; /* Povolit zalomení */
     }
+    
     .mini-stat-box { 
         background-color: #1f2937; 
         border: 1px solid #374151; 
         border-radius: 8px; 
         padding: 20px; 
         text-align: center; 
-        flex: 1;           /* Roztáhne se rovnoměrně */
-        min-width: 200px;  /* Minimální šířka před zalomením */
+        flex: 1; /* Na PC se roztáhnou rovnoměrně */
+        min-width: 250px; 
     }
     
-    /* Úprava pro mobily (pokud je displej menší než 600px) */
-    @media only screen and (max-width: 600px) {
+    /* MOBILNÍ ZOBRAZENÍ (Pod sebe) */
+    @media only screen and (max-width: 768px) {
+        .mini-stat-container {
+            flex-direction: column; /* Vynutit sloupec */
+        }
         .mini-stat-box {
-            min-width: 100%; /* Box zabere celou šířku */
+            width: 100%; /* Roztáhnout na celou šířku */
             margin-bottom: 10px;
+            min-width: 0;
         }
     }
 
@@ -217,19 +220,54 @@ def check_license_online(key):
     except: pass
     return False, "Neplatný klíč", None
 
+# --- UPRAVENÁ FUNKCE ARES (Robustnější) ---
 def get_ares_data(ico):
-    import urllib3; urllib3.disable_warnings()
+    import urllib3
+    urllib3.disable_warnings()
+    
     if not ico: return None
-    ico = "".join(filter(str.isdigit, str(ico))).zfill(8)
+    # Vyčistit vstupy - jen čísla, doplnit na 8 znaků
+    ico_clean = "".join(filter(str.isdigit, str(ico)))
+    if len(ico_clean) == 0: return None
+    ico_final = ico_clean.zfill(8)
+    
     try:
-        r = requests.get(f"https://ares.gov.cz/ekonomicke-subjekty/v-1/ekonomicke-subjekty/{ico}", headers={"accept": "application/json"}, verify=False, timeout=5)
+        url = f"https://ares.gov.cz/ekonomicke-subjekty/v-1/ekonomicke-subjekty/{ico_final}"
+        # Přidání User-Agent je klíčové, aby ARES požadavek nezablokoval
+        headers = {
+            "accept": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        }
+        
+        r = requests.get(url, headers=headers, verify=False, timeout=5)
+        
         if r.status_code == 200:
-            d = r.json(); s = d.get('sidlo', {})
+            d = r.json()
+            # Zpracování adresy
+            s = d.get('sidlo', {})
             adr = s.get('textovaAdresa', '')
-            if not adr: adr = f"{s.get('nazevUlice','')} {s.get('cisloDomovni','')}/{s.get('cisloOrientacni','')}, {s.get('psc','')} {s.get('nazevObce','')}".strip()
-            return {"jmeno": d.get('obchodniJmeno', ''), "adresa": adr, "ico": ico, "dic": d.get('dic', '')}
-    except: pass
-    return None
+            if not adr:
+                # Sestavení adresy pokud chybí textová
+                ulice = s.get('nazevUlice', '')
+                cislo = f"{s.get('cisloDomovni','')}/{s.get('cisloOrientacni','')}".strip('/')
+                obec = s.get('nazevObce', '')
+                psc = s.get('psc', '')
+                adr = f"{ulice} {cislo}, {psc} {obec}".strip()
+                if adr.startswith(","): adr = adr[1:].strip()
+
+            return {
+                "jmeno": d.get('obchodniJmeno', ''),
+                "adresa": adr,
+                "ico": ico_final,
+                "dic": d.get('dic', '')
+            }
+        else:
+            # Debugging - pokud ARES vrátí chybu
+            print(f"ARES Error: {r.status_code}")
+            return None
+    except Exception as e:
+        print(f"ARES Exception: {str(e)}")
+        return None
 
 def process_logo(uploaded_file):
     if not uploaded_file: return None
