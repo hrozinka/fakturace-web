@@ -114,10 +114,24 @@ def init_db():
 if 'db_inited' not in st.session_state:
     init_db(); st.session_state.db_inited = True
 
-# --- 3. POMOCNÉ FUNKCE ---
+# --- 3. POMOCNÉ FUNKCE (OPRAVENO PARSOVÁNÍ DATA) ---
 def hash_password(password): return hashlib.sha256(str.encode(password)).hexdigest()
 def remove_accents(s): return "".join([c for c in unicodedata.normalize('NFKD', str(s)) if not unicodedata.combining(c)]) if s else ""
-def format_date(d): return datetime.strptime(str(d), '%Y-%m-%d').strftime('%d.%m.%Y') if d and str(d) != 'None' else ""
+
+def format_date(d):
+    """Bezpečné formátování data, které zvládne i ISO format s časem"""
+    if not d or str(d) == 'None': return ""
+    try:
+        # Pokud je to string (z databáze), ořízneme časovou část
+        if isinstance(d, str):
+            # Bere jen prvních 10 znaků (YYYY-MM-DD)
+            d_str = d[:10]
+            d_obj = datetime.strptime(d_str, '%Y-%m-%d')
+            return d_obj.strftime('%d.%m.%Y')
+        # Pokud je to už datetime/date objekt
+        return d.strftime('%d.%m.%Y')
+    except:
+        return str(d) # Fallback
 
 def generate_license_key():
     return '-'.join([''.join(random.choices(string.ascii_uppercase + string.digits, k=4)) for _ in range(4)])
@@ -125,9 +139,11 @@ def generate_license_key():
 def check_license_validity(uid):
     res = run_query("SELECT license_valid_until FROM users WHERE id=?", (uid,), single=True)
     if not res or not res['license_valid_until']: return False, "Žádná"
-    exp = datetime.strptime(res['license_valid_until'], '%Y-%m-%d').date()
-    if exp >= date.today(): return True, exp
-    return False, exp
+    try:
+        exp = datetime.strptime(str(res['license_valid_until'])[:10], '%Y-%m-%d').date()
+        if exp >= date.today(): return True, exp
+        return False, exp
+    except: return False, "Chyba data"
 
 # --- ARES ---
 def get_ares_data(ico):
@@ -237,7 +253,6 @@ if not st.session_state.user_id:
 
 # --- 9. APP ---
 uid=st.session_state.user_id; role=st.session_state.role; is_pro=st.session_state.is_pro
-# TOTO JE OPRAVA VAŠÍ CHYBY - definujeme proměnnou globálně pro sekci APP
 full_name_display = st.session_state.full_name or st.session_state.username
 
 run_command("UPDATE users SET last_active=? WHERE id=?",(datetime.now().isoformat(), uid))
@@ -254,11 +269,28 @@ if role == 'admin':
         users = run_query("SELECT * FROM users WHERE role!='admin'")
         for u in users:
             with st.expander(f"{u['username']} ({u['email']})"):
-                st.write(f"Vytvořeno: {format_date(u['created_at'])} | Aktivní: {u['last_active']}")
-                lic_till = st.date_input(f"Licence do ({u['username']})", value=datetime.strptime(u['license_valid_until'], '%Y-%m-%d').date() if u['license_valid_until'] else None, key=f"ld_{u['id']}")
-                if st.button("Uložit expiraci", key=f"sv_{u['id']}"):
-                    run_command("UPDATE users SET license_valid_until=? WHERE id=?",(lic_till, u['id'])); st.success("Uloženo"); st.rerun()
-                if st.button("Smazat uživatele", key=f"del_{u['id']}", type="primary"):
+                # RESPONSIVNÍ ZOBRAZENÍ V ADMINU
+                st.markdown(f"**Vytvořeno:** {format_date(u['created_at'])}")
+                st.markdown(f"**Aktivní:** {format_date(u['last_active'])}")
+                st.markdown(f"**Telefon:** {u['phone'] or '---'}")
+                
+                st.divider()
+                st.write("📅 Správa licence")
+                
+                # Bezpečné načtení data pro Date Input
+                def_val = date.today()
+                if u['license_valid_until']:
+                    try: def_val = datetime.strptime(u['license_valid_until'][:10], '%Y-%m-%d').date()
+                    except: pass
+                
+                lic_till = st.date_input("Platnost do:", value=def_val, key=f"ld_{u['id']}")
+                new_key = st.text_input("Klíč", value=u['license_key'] or "", key=f"lk_{u['id']}")
+                
+                if st.button("💾 Uložit změny", key=f"sv_{u['id']}"):
+                    run_command("UPDATE users SET license_valid_until=?, license_key=? WHERE id=?",(lic_till, new_key, u['id']))
+                    st.success("Uloženo"); st.rerun()
+                
+                if st.button("🗑️ Smazat uživatele", key=f"del_{u['id']}", type="primary"):
                     run_command("DELETE FROM users WHERE id=?",(u['id'],)); st.rerun()
 
     with tabs[1]:
