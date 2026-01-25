@@ -15,7 +15,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from PIL import Image
 
-# --- 0. KONFIGURACE A BEZPEČNOST ---
+# --- 0. KONFIGURACE ---
 try:
     email_pass = st.secrets["EMAIL_PASSWORD"]
 except:
@@ -44,77 +44,82 @@ st.markdown("""
     /* === HLAVNÍ POZADÍ === */
     .stApp { background-color: #111827; color: #f9fafb; font-family: 'Segoe UI', sans-serif; }
     
-    /* === VSTUPNÍ POLE === */
+    /* === VSTUPY === */
     .stTextInput input, .stNumberInput input, .stTextArea textarea, .stDateInput input, 
     .stSelectbox div[data-baseweb="select"] {
-        background-color: #1f2937 !important; 
-        border: 1px solid #374151 !important; 
-        color: #f9fafb !important;
-        border-radius: 10px !important;
-        padding: 10px !important;
+        background-color: #1f2937 !important; border: 1px solid #374151 !important; 
+        color: #f9fafb !important; border-radius: 8px !important;
     }
-    
-    /* === MENU - BOČNÍ PANEL === */
+
+    /* === MENU - BOXY (VYLEPŠENÉ) === */
     section[data-testid="stSidebar"] .stRadio div[role="radiogroup"] > label > div:first-child {
         display: none !important;
     }
+    
     section[data-testid="stSidebar"] .stRadio label {
-        width: 100% !important; display: flex !important; justify-content: center !important;
-        align-items: center !important; background-color: #1f2937 !important;
-        border: 1px solid #374151 !important; border-radius: 12px !important;
-        margin-bottom: 12px !important; cursor: pointer; transition: all 0.2s ease-in-out;
-        color: #f3f4f6 !important; font-weight: 600 !important; font-size: 16px !important;
-        padding: 16px 10px !important; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        width: 100% !important;
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        background-color: #1f2937 !important;
+        padding: 18px 10px !important;      /* Výška boxu */
+        margin-bottom: 10px !important;
+        border-radius: 10px !important;
+        border: 1px solid #374151 !important;
+        cursor: pointer;
+        
+        /* TEXT - SVĚTLÝ A ČITELNÝ */
+        font-size: 16px !important;         
+        font-weight: 700 !important;        
+        color: #ffffff !important;          /* Čistě bílá */
+        text-align: center !important;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        transition: all 0.2s ease;
     }
-    /* MOBILNÍ ZVĚTŠENÍ */
+    
+    /* Mobilní úprava */
     @media only screen and (max-width: 600px) {
         section[data-testid="stSidebar"] .stRadio label {
-            padding: 24px 10px !important; margin-bottom: 15px !important; font-size: 18px !important;
+            padding: 22px 10px !important;
+            font-size: 18px !important;
         }
     }
-    section[data-testid="stSidebar"] .stRadio label:hover {
-        border-color: #eab308 !important; color: #eab308 !important; background-color: #374151 !important;
-    }
+
+    /* Aktivní položka - Zlatá */
     section[data-testid="stSidebar"] .stRadio label[data-checked="true"] {
         background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%) !important;
-        color: #111827 !important; border: none !important; font-weight: 800 !important;
-        box-shadow: 0 0 15px rgba(234, 179, 8, 0.3);
+        color: #000000 !important;          /* Černý text na zlaté */
+        border: none !important;
+    }
+    
+    section[data-testid="stSidebar"] .stRadio label:hover {
+        border-color: #eab308 !important;
+        color: #eab308 !important;
     }
 
-    /* === LOGIN KARTA === */
-    .login-container {
-        background-color: #1f2937; padding: 40px; border-radius: 20px;
-        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); border: 1px solid #374151;
-        text-align: center; margin-top: 50px;
+    /* === STATISTIKY (MALA) === */
+    .mini-stat-container { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+    .mini-stat-box { 
+        background: #1f2937; border-radius: 8px; padding: 15px; flex: 1; 
+        text-align: center; border: 1px solid #374151; min-width: 120px; 
     }
-    .login-header { font-size: 28px; font-weight: 800; color: #eab308; margin-bottom: 10px; text-transform: uppercase; }
+    .mini-label { font-size: 12px; color: #9ca3af; text-transform: uppercase; margin-bottom: 5px; }
+    .mini-val-green { font-size: 20px; font-weight: 700; color: #34d399; }
+    .mini-val-red { font-size: 20px; font-weight: 700; color: #f87171; }
 
     /* === TLAČÍTKA === */
     .stButton > button, div[data-testid="stDownloadButton"] > button {
         background-color: #1f2937 !important; color: #f9fafb !important;
-        border: 1px solid #374151 !important; border-radius: 8px; width: 100%; font-weight: 500; padding: 10px 0;
+        border: 1px solid #374151 !important; border-radius: 8px; width: 100%;
     }
-    .stButton > button:hover, div[data-testid="stDownloadButton"] > button:hover { 
-        border-color: #eab308 !important; color: #eab308 !important; 
-    }
+    .stButton > button:hover { border-color: #eab308 !important; color: #eab308 !important; }
     div[data-testid="stForm"] button[kind="primary"], button[kind="primary"] {
         background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%) !important;
-        color: #111827 !important; border: none !important; font-weight: bold !important;
+        color: #000000 !important; border: none !important; font-weight: bold !important;
     }
-
-    /* === STATISTIKY === */
-    .mini-stat-container { display: flex; gap: 15px; margin-bottom: 25px; flex-wrap: wrap; }
-    .mini-stat-box { 
-        background: #1f2937; border-radius: 12px; padding: 20px; flex: 1; 
-        text-align: center; border: 1px solid #374151; min-width: 140px; 
-    }
-    .mini-val-green { font-size: 24px; font-weight: 800; color: #34d399; }
-    .mini-val-red { font-size: 24px; font-weight: 800; color: #f87171; }
     
-    /* === EXPANDERY === */
+    /* === EXPENDERY === */
     div[data-testid="stExpander"] { background-color: #1f2937 !important; border: 1px solid #374151 !important; border-radius: 12px !important; }
-    div[data-testid="stExpander"] details summary { color: #f9fafb !important; }
-    div[data-testid="stExpander"] svg { fill: #f9fafb !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -219,7 +224,9 @@ def check_license_online(key):
     return False, "Neplatný klíč", None
 
 def send_welcome_email(to_email, full_name):
-    if not SYSTEM_EMAIL["enabled"] or not SYSTEM_EMAIL["password"]: return False
+    if not SYSTEM_EMAIL["enabled"] or not SYSTEM_EMAIL["password"]: 
+        st.error("Chyba emailu: Není nastaveno heslo nebo server.")
+        return False
     try:
         msg = MIMEMultipart(); msg['From'] = SYSTEM_EMAIL["email"]; msg['To'] = to_email; msg['Subject'] = "Vítejte v MojeFaktury!"
         msg.attach(MIMEText(f"Dobrý den, {full_name},\n\nděkujeme za registraci.", 'plain'))
@@ -227,7 +234,10 @@ def send_welcome_email(to_email, full_name):
         server.login(SYSTEM_EMAIL["email"], SYSTEM_EMAIL["password"])
         server.sendmail(SYSTEM_EMAIL["email"], to_email, msg.as_string()); server.quit()
         return True
-    except: return False
+    except Exception as e:
+        # VYPIS CHYBY PRO UŽIVATELE (ABYSTE VIDĚL, PROČ TO NEJDE)
+        st.error(f"Chyba odeslání mailu: {e}")
+        return False
 
 def generate_pdf(faktura_id, uid, is_pro):
     from fpdf import FPDF
@@ -312,7 +322,10 @@ if not st.session_state.user_id:
                         try:
                             fullname = f"{fn} {ln}".strip()
                             run_command("INSERT INTO users (username, password_hash, full_name, email, phone, created_at, last_active) VALUES (?, ?, ?, ?, ?, ?, ?)", (usr, hash_password(p1), fullname, mail, tel, datetime.now().isoformat(), datetime.now().isoformat()))
-                            send_welcome_email(mail, fullname); st.success("Účet vytvořen!")
+                            if send_welcome_email(mail, fullname):
+                                st.success("Účet vytvořen! Zkontrolujte email.")
+                            else:
+                                st.warning("Účet vytvořen, ale email se nepodařilo odeslat.")
                         except: st.error("Uživatel existuje.")
     st.stop()
 
@@ -325,16 +338,40 @@ st.sidebar.markdown(f"<h3 style='text-align:center; color:#eab308; margin-top:0;
 st.sidebar.caption(f"<div style='text-align:center; margin-bottom:20px; color:#9ca3af;'>{full_name_display}<br>{'👑 ADMIN' if role=='admin' else ('⭐ PRO Verze' if is_pro else '🆓 FREE Verze')}</div>", unsafe_allow_html=True)
 if st.sidebar.button("Odhlásit"): st.session_state.user_id = None; st.rerun()
 
+# --- ADMIN PANEL ---
 if role == 'admin':
-    st.header("👑 Admin"); tabs = st.tabs(["Uživatelé", "Statistiky"])
+    st.header("👑 Admin Panel")
+    tabs = st.tabs(["Uživatelé", "Statistiky"])
+    
     with tabs[0]:
-        for u in run_query("SELECT * FROM users WHERE role != 'admin'"):
-            with st.expander(f"{u['username']}"):
-                cur = u['license_key'] or ""; new_lic = st.text_input("Licence", value=cur, key=f"l_{u['id']}")
-                if st.button("Uložit", key=f"s_{u['id']}"): run_command("UPDATE users SET license_key=? WHERE id=?", (new_lic, u['id'])); st.rerun()
-                if st.button("SMAZAT", key=f"d_{u['id']}"): run_command("DELETE FROM users WHERE id=?", (u['id'],)); st.rerun()
-    with tabs[1]: st.metric("Uživatelé", run_query("SELECT COUNT(*) FROM users")[0][0]); st.metric("Faktury", run_query("SELECT COUNT(*) FROM faktury")[0][0])
+        # ZOBRAZENÍ VŠECH ÚDAJŮ O UŽIVATELÍCH
+        users = run_query("SELECT * FROM users WHERE role != 'admin'")
+        for u in users:
+            with st.expander(f"👤 {u['username']} | {u['full_name']}"):
+                col1, col2 = st.columns(2)
+                col1.write(f"**Email:** {u['email']}")
+                col1.write(f"**Telefon:** {u['phone']}")
+                col1.write(f"**Vytvořeno:** {format_date(u['created_at'])}")
+                
+                col2.write(f"**Role:** {u['role']}")
+                col2.write(f"**Aktivita:** {u['last_active'] or 'Nikdy'}")
+                col2.write(f"**Licence do:** {format_date(u['license_valid_until']) if u['license_valid_until'] else '---'}")
+                
+                cur_lic = u['license_key'] or ""
+                new_lic = st.text_input("Licenční klíč", value=cur_lic, key=f"l_{u['id']}")
+                
+                b1, b2 = st.columns(2)
+                if b1.button("💾 Uložit", key=f"s_{u['id']}"):
+                    run_command("UPDATE users SET license_key=? WHERE id=?", (new_lic, u['id']))
+                    st.success("Uloženo"); st.rerun()
+                if b2.button("🗑️ SMAZAT", key=f"d_{u['id']}", type="primary"):
+                    run_command("DELETE FROM users WHERE id=?", (u['id'],)); st.rerun()
 
+    with tabs[1]:
+        st.metric("Celkem uživatelů", run_query("SELECT COUNT(*) FROM users")[0][0])
+        st.metric("Celkem faktur", run_query("SELECT COUNT(*) FROM faktury")[0][0])
+
+# --- USER PANEL ---
 else:
     menu = st.sidebar.radio(" ", ["📊 Faktury", "👥 Klienti", "🏷️ Kategorie", "⚙️ Nastavení"])
     cnt_cli = run_query("SELECT COUNT(*) FROM klienti WHERE user_id=?", (uid,), single=True)[0]
@@ -398,40 +435,25 @@ else:
                 if upl and st.button("Obnovit ze zálohy"):
                     try:
                         data = json.load(upl)
-                        # 1. Smazání starých dat uživatele
                         run_command("DELETE FROM nastaveni WHERE user_id=?", (uid,))
                         run_command("DELETE FROM klienti WHERE user_id=?", (uid,))
                         run_command("DELETE FROM kategorie WHERE user_id=?", (uid,))
-                        # Smazat polozky faktur uzivatele
                         faktury_ids = run_query("SELECT id FROM faktury WHERE user_id=?", (uid,))
                         for f in faktury_ids: run_command("DELETE FROM faktura_polozky WHERE faktura_id=?", (f['id'],))
                         run_command("DELETE FROM faktury WHERE user_id=?", (uid,))
-                        
-                        # 2. Vložení nových dat
                         for row in data.get('nastaveni', []):
-                            run_command("INSERT INTO nastaveni (user_id, nazev, adresa, ico, dic, ucet, banka, email, telefon, iban) VALUES (?,?,?,?,?,?,?,?,?,?)", 
-                                       (uid, row.get('nazev'), row.get('adresa'), row.get('ico'), row.get('dic'), row.get('ucet'), row.get('banka'), row.get('email'), row.get('telefon'), row.get('iban')))
-                        
+                            run_command("INSERT INTO nastaveni (user_id, nazev, adresa, ico, dic, ucet, banka, email, telefon, iban) VALUES (?,?,?,?,?,?,?,?,?,?)", (uid, row.get('nazev'), row.get('adresa'), row.get('ico'), row.get('dic'), row.get('ucet'), row.get('banka'), row.get('email'), row.get('telefon'), row.get('iban')))
                         for row in data.get('klienti', []):
-                            run_command("INSERT INTO klienti (user_id, jmeno, adresa, ico, dic, email, poznamka) VALUES (?,?,?,?,?,?,?)",
-                                       (uid, row.get('jmeno'), row.get('adresa'), row.get('ico'), row.get('dic'), row.get('email'), row.get('poznamka')))
-                        
+                            run_command("INSERT INTO klienti (user_id, jmeno, adresa, ico, dic, email, poznamka) VALUES (?,?,?,?,?,?,?)", (uid, row.get('jmeno'), row.get('adresa'), row.get('ico'), row.get('dic'), row.get('email'), row.get('poznamka')))
                         for row in data.get('kategorie', []):
                             blob = base64.b64decode(row.get('logo_blob')) if row.get('logo_blob') else None
-                            run_command("INSERT INTO kategorie (user_id, nazev, barva, prefix, aktualni_cislo, logo_blob) VALUES (?,?,?,?,?,?)",
-                                       (uid, row.get('nazev'), row.get('barva'), row.get('prefix'), row.get('aktualni_cislo'), blob))
-                        
-                        # Faktury a položky (zachování ID pro vazbu)
+                            run_command("INSERT INTO kategorie (user_id, nazev, barva, prefix, aktualni_cislo, logo_blob) VALUES (?,?,?,?,?,?)", (uid, row.get('nazev'), row.get('barva'), row.get('prefix'), row.get('aktualni_cislo'), blob))
                         for row in data.get('faktury', []):
-                            new_fid = run_command("INSERT INTO faktury (user_id, cislo, cislo_full, klient_id, kategorie_id, datum_vystaveni, datum_duzp, datum_splatnosti, castka_celkem, zpusob_uhrady, variabilni_symbol, cislo_objednavky, uvodni_text, uhrazeno, muj_popis) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                                       (uid, row.get('cislo'), row.get('cislo_full'), row.get('klient_id'), row.get('kategorie_id'), row.get('datum_vystaveni'), row.get('datum_duzp'), row.get('datum_splatnosti'), row.get('castka_celkem'), row.get('zpusob_uhrady'), row.get('variabilni_symbol'), row.get('cislo_objednavky'), row.get('uvodni_text'), row.get('uhrazeno'), row.get('muj_popis')))
-                            
-                            # Najít položky k této staré faktuře (dle ID v JSONu) a vložit je k nové faktuře
+                            new_fid = run_command("INSERT INTO faktury (user_id, cislo, cislo_full, klient_id, kategorie_id, datum_vystaveni, datum_duzp, datum_splatnosti, castka_celkem, zpusob_uhrady, variabilni_symbol, cislo_objednavky, uvodni_text, uhrazeno, muj_popis) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (uid, row.get('cislo'), row.get('cislo_full'), row.get('klient_id'), row.get('kategorie_id'), row.get('datum_vystaveni'), row.get('datum_duzp'), row.get('datum_splatnosti'), row.get('castka_celkem'), row.get('zpusob_uhrady'), row.get('variabilni_symbol'), row.get('cislo_objednavky'), row.get('uvodni_text'), row.get('uhrazeno'), row.get('muj_popis')))
                             old_fid = row.get('id')
                             for item in data.get('faktura_polozky', []):
                                 if item.get('faktura_id') == old_fid:
                                     run_command("INSERT INTO faktura_polozky (faktura_id, nazev, cena) VALUES (?,?,?)", (new_fid, item.get('nazev'), item.get('cena')))
-                        
                         st.success("Data obnovena!"); st.rerun()
                     except Exception as e: st.error(f"Chyba importu: {str(e)}")
 
@@ -500,6 +522,15 @@ else:
     elif "Faktury" in menu:
         st.header("📊 Faktury")
         
+        # 1. VELKÉ STATISTIKY (GLOBÁLNÍ)
+        cy = datetime.now().year
+        g_sc = run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=? AND strftime('%Y', datum_vystaveni) = ?", (uid, str(cy)), True)[0] or 0
+        g_su = run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=? AND uhrazeno = 0", (uid,), True)[0] or 0
+        st.metric(f"Obrat {cy}", f"{g_sc:,.0f} Kč")
+        st.metric("Celkem neuhrazeno", f"{g_su:,.0f} Kč", delta_color="inverse")
+        st.divider()
+
+        # 2. PŘIDÁNÍ FAKTURY
         if not is_pro and cnt_inv >= 5: st.error("Limit 5 faktur (FREE).")
         else:
             with st.expander("➕ Vystavit fakturu"):
@@ -523,27 +554,20 @@ else:
 
         st.divider()
         
-        # --- FILTR ---
+        # 3. FILTR
         all_clients = run_query("SELECT id, jmeno FROM klienti WHERE user_id=?", (uid,))
         client_opts = ["Všichni"] + [c['jmeno'] for c in all_clients]
         sel_client = st.selectbox("Filtr podle klienta", client_opts)
 
-        # --- STATISTIKY (POD FILTREM) ---
-        cy = datetime.now().year
-        base_sql = "FROM faktury f JOIN klienti k ON f.klient_id = k.id WHERE f.user_id=?"
-        params = [uid]
+        # 4. MALÉ STATISTIKY (PRO FILTR)
         if sel_client != "Všichni":
-            base_sql += " AND k.jmeno = ?"
-            params.append(sel_client)
-        
-        q_sc = f"SELECT SUM(f.castka_celkem) {base_sql} AND strftime('%Y', f.datum_vystaveni) = ?"
-        sc = run_query(q_sc, tuple(params + [str(cy)]), True)[0] or 0
-        q_su = f"SELECT SUM(f.castka_celkem) {base_sql} AND f.uhrazeno = 0"
-        su = run_query(q_su, tuple(params), True)[0] or 0
-        
-        st.markdown(f"<div class='mini-stat-container'><div class='mini-stat-box'><div class='mini-label'>Fakturováno {cy}</div><div class='mini-val-green'>{sc:,.0f} Kč</div></div><div class='mini-stat-box'><div class='mini-label'>Neuhrazeno</div><div class='mini-val-red'>{su:,.0f} Kč</div></div></div>", unsafe_allow_html=True)
+            q_sc = "SELECT SUM(f.castka_celkem) FROM faktury f JOIN klienti k ON f.klient_id = k.id WHERE f.user_id=? AND k.jmeno = ? AND strftime('%Y', f.datum_vystaveni) = ?"
+            sc = run_query(q_sc, (uid, sel_client, str(cy)), True)[0] or 0
+            q_su = "SELECT SUM(f.castka_celkem) FROM faktury f JOIN klienti k ON f.klient_id = k.id WHERE f.user_id=? AND k.jmeno = ? AND f.uhrazeno = 0"
+            su = run_query(q_su, (uid, sel_client), True)[0] or 0
+            st.markdown(f"<div class='mini-stat-container'><div class='mini-stat-box'><div class='mini-label'>Fakturováno ({sel_client})</div><div class='mini-val-green'>{sc:,.0f} Kč</div></div><div class='mini-stat-box'><div class='mini-label'>Neuhrazeno ({sel_client})</div><div class='mini-val-red'>{su:,.0f} Kč</div></div></div>", unsafe_allow_html=True)
 
-        # --- SEZNAM ---
+        # 5. SEZNAM FAKTUR
         q_list = f"SELECT f.*, k.jmeno FROM faktury f JOIN klienti k ON f.klient_id = k.id WHERE f.user_id=?"
         p_list = [uid]
         if sel_client != "Všichni":
@@ -567,6 +591,7 @@ else:
                 f_edit_key = f"edit_f_{r['id']}"
                 if f_edit_key not in st.session_state: st.session_state[f_edit_key] = False
                 if c3.button("✏️ Upravit", key=f"bef_{r['id']}"): st.session_state[f_edit_key] = True; st.rerun()
+                
                 if st.session_state[f_edit_key]:
                     st.markdown("---")
                     with st.form(f"frm_ef_{r['id']}"):
