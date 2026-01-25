@@ -404,7 +404,27 @@ else:
                         st.session_state.is_pro = True
                         st.success("Aktivováno!"); st.rerun()
                     else: st.error(msg)
-        else: st.success("✅ PRO Verze aktivní")
+        else: 
+            st.success("✅ PRO Verze aktivní")
+            with st.expander("🔑 Správa licence"):
+                # Načtení aktuálního klíče uživatele
+                u_data = run_query("SELECT license_key FROM users WHERE id=?", (uid,), single=True)
+                cur_k = u_data['license_key'] if u_data else ""
+                
+                new_k = st.text_input("Změnit klíč", value=cur_k)
+                
+                c1, c2 = st.columns(2)
+                if c1.button("💾 Změnit licenci"):
+                     valid, msg, exp = check_license_online(new_k)
+                     if valid:
+                         run_command("UPDATE users SET license_key=?, license_valid_until=? WHERE id=?", (new_k, exp, uid))
+                         st.success("Licence aktualizována"); st.rerun()
+                     else: st.error(msg)
+                
+                if c2.button("🗑️ Deaktivovat (na FREE)", type="primary"):
+                    run_command("UPDATE users SET license_key=NULL, license_valid_until=NULL WHERE id=?", (uid,))
+                    st.session_state.is_pro = False
+                    st.rerun()
 
         c = run_query("SELECT * FROM nastaveni WHERE user_id=? LIMIT 1", (uid,), single=True) or {}
         def_n = c.get('nazev', st.session_state.full_name)
@@ -474,7 +494,8 @@ else:
         
         for r in run_query("SELECT * FROM klienti WHERE user_id=?", (uid,)):
             with st.expander(r['jmeno']):
-                if r.get('poznamka'): st.info(f"ℹ️ {r['poznamka']}")
+                # OPRAVA CHYBY ZDE:
+                if r['poznamka']: st.info(f"ℹ️ {r['poznamka']}")
                 
                 # UPDATE CLIENT
                 k_edit_key = f"k_edit_{r['id']}"
