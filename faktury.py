@@ -20,8 +20,8 @@ SYSTEM_EMAIL = {
     "enabled": False, 
     "server": "smtp.seznam.cz",
     "port": 465,
-    "email": "jsem@michalkochtik.cz",
-    "password": "Miki+420"
+    "email": "vas-email@seznam.cz",
+    "password": "vase-heslo"
 }
 
 # --- 1. KONFIGURACE A CSS ---
@@ -86,7 +86,6 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS nastaveni (id INTEGER PRIMARY KEY, user_id INTEGER, nazev TEXT, adresa TEXT, ico TEXT, dic TEXT, ucet TEXT, banka TEXT, email TEXT, telefon TEXT, iban TEXT, smtp_server TEXT, smtp_port INTEGER, smtp_email TEXT, smtp_password TEXT, notify_email TEXT, notify_days INTEGER, notify_active INTEGER)''')
     c.execute('''CREATE TABLE IF NOT EXISTS klienti (id INTEGER PRIMARY KEY, user_id INTEGER, jmeno TEXT, adresa TEXT, ico TEXT, dic TEXT, email TEXT, poznamka TEXT)''')
     
-    # Migrace pro poznámku
     try: c.execute("ALTER TABLE klienti ADD COLUMN poznamka TEXT")
     except: pass
 
@@ -407,7 +406,6 @@ else:
         else: 
             st.success("✅ PRO Verze aktivní")
             with st.expander("🔑 Správa licence"):
-                # Načtení aktuálního klíče a data platnosti
                 u_data = run_query("SELECT license_key, license_valid_until FROM users WHERE id=?", (uid,), single=True)
                 cur_k = u_data['license_key'] if u_data else ""
                 valid_until = u_data['license_valid_until'] if u_data and u_data['license_valid_until'] else "Neznámo"
@@ -558,10 +556,11 @@ else:
         su_all = run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=? AND uhrazeno = 0 AND strftime('%Y', datum_vystaveni) = ?", (uid, str(cy)), True)[0] or 0
         sh_all = run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=?", (uid,), True)[0] or 0
         
+        # OPRAVA: POUŽITÍ PROMĚNNÝCH S _ALL
         st.markdown(f"""
         <div class="mini-stat-container">
             <div class="mini-stat-box"><div class="mini-label">Fakturováno {cy} (VŠE)</div><div class="mini-val-green">{sc_all:,.0f} Kč</div></div>
-            <div class="mini-stat-box"><div class="mini-label">Celkem Historie (VŠE)</div><div class="mini-val-gray">{sh:,.0f} Kč</div></div>
+            <div class="mini-stat-box"><div class="mini-label">Celkem Historie (VŠE)</div><div class="mini-val-gray">{sh_all:,.0f} Kč</div></div>
             <div class="mini-stat-box"><div class="mini-label">Neuhrazeno (VŠE)</div><div class="mini-val-red">{su_all:,.0f} Kč</div></div>
         </div>
         """, unsafe_allow_html=True)
