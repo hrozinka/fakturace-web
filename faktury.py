@@ -136,7 +136,7 @@ def check_license_online(key):
     try:
         # !!! ZDE UPRAVTE URL NA SVOU 'RAW' ADRESU GISTU !!!
         # Příklad: https://gist.githubusercontent.com/UZIVATEL/HASH/raw/licence.json
-        url = f"https://gist.githubusercontent.com/hrozinka/6cd3ef1eea1e6d7dc7b188bdbeb84235/raw/licence.json?t={int(datetime.now().timestamp())}"
+        url = f"https://gist.github.com/hrozinka/licence.json?t={int(datetime.now().timestamp())}"
         
         r = requests.get(url, timeout=3)
         if r.status_code == 200:
@@ -694,3 +694,4 @@ else:
                     run_command("DELETE FROM faktury WHERE id=? AND user_id=?", (r['id'], uid))
                     run_command("DELETE FROM faktura_polozky WHERE faktura_id=?", (r['id'],))
                     st.rerun()
+
