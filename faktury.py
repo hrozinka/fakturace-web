@@ -103,7 +103,6 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS kategorie (id INTEGER PRIMARY KEY, user_id INTEGER, nazev TEXT, barva TEXT, prefix TEXT, aktualni_cislo INTEGER DEFAULT 1, logo_blob BLOB)''')
     c.execute('''CREATE TABLE IF NOT EXISTS faktury (id INTEGER PRIMARY KEY, user_id INTEGER, cislo INTEGER, cislo_full TEXT, klient_id INTEGER, kategorie_id INTEGER, datum_vystaveni TEXT, datum_duzp TEXT, datum_splatnosti TEXT, castka_celkem REAL, zpusob_uhrady TEXT, variabilni_symbol TEXT, cislo_objednavky TEXT, uvodni_text TEXT, uhrazeno INTEGER DEFAULT 0, muj_popis TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS faktura_polozky (id INTEGER PRIMARY KEY, faktura_id INTEGER, nazev TEXT, cena REAL)''')
-    # NOVÁ TABULKA PRO LICENCE
     c.execute('''CREATE TABLE IF NOT EXISTS licencni_klice (id INTEGER PRIMARY KEY, kod TEXT UNIQUE, dny_platnosti INTEGER, vygenerovano TEXT, pouzito_uzivatelem_id INTEGER, poznamka TEXT)''')
     
     try:
@@ -136,7 +135,6 @@ def get_ares_data(ico):
     if not ico: return None
     ico = "".join(filter(str.isdigit, str(ico))).zfill(8)
     try:
-        # Nový ARES endpoint (2024/2025)
         url = f"https://ares.gov.cz/ekonomicke-subjekty/v-1/ekonomicke-subjekty/{ico}"
         headers = {"accept": "application/json", "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
         r = requests.get(url, headers=headers, verify=False, timeout=5)
@@ -239,9 +237,12 @@ if not st.session_state.user_id:
 
 # --- 9. APP ---
 uid=st.session_state.user_id; role=st.session_state.role; is_pro=st.session_state.is_pro
+# TOTO JE OPRAVA VAŠÍ CHYBY - definujeme proměnnou globálně pro sekci APP
+full_name_display = st.session_state.full_name or st.session_state.username
+
 run_command("UPDATE users SET last_active=? WHERE id=?",(datetime.now().isoformat(), uid))
 
-st.sidebar.title(f"👤 {st.session_state.full_name or st.session_state.username}")
+st.sidebar.title(f"👤 {full_name_display}")
 if st.sidebar.button("Odhlásit"): st.session_state.user_id=None; st.rerun()
 
 # ADMIN
@@ -289,11 +290,8 @@ else:
         sel_year = st.selectbox("Rok", sorted(years, reverse=True))
         
         # 2. STATISTIKY (3 BOXY)
-        # Obrat vybraný rok
         sc_y = run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=? AND strftime('%Y', datum_vystaveni)=?", (uid, sel_year), True)[0] or 0
-        # Obrat celkem
         sc_all = run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=?", (uid,), True)[0] or 0
-        # Neuhrazeno celkem
         su_all = run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=? AND uhrazeno=0", (uid,), True)[0] or 0
         
         st.markdown(f"""
@@ -323,14 +321,16 @@ else:
                 _, full, _ = get_next_invoice_number(cid, uid); st.info(f"Doklad: {full}")
                 d1,d2 = st.columns(2); dv = d1.date_input("Vystavení", date.today(), key=f"d1_{rid}"); ds = d2.date_input("Splatnost", date.today()+timedelta(14), key=f"d2_{rid}")
                 ed = st.data_editor(st.session_state.items_df, num_rows="dynamic", use_container_width=True, key=f"e_{rid}")
-                tot = float(pd.to_numeric(ed["Cena"], errors='coerce').fillna(0).sum()); st.write(f"**Celkem: {tot:.2f} Kč**")
-                if st.button("Vystavit", type="primary", key=f"b_{rid}"):
+                tot = float(pd.to_numeric(ed["Cena"], errors='coerce').fillna(0).sum()); st.markdown(f"### Celkem: {tot:,.2f} Kč")
+                if st.button("Vystavit fakturu", type="primary", key=f"b_{rid}"):
                     fid = run_command("INSERT INTO faktury (user_id, cislo_full, klient_id, kategorie_id, datum_vystaveni, datum_splatnosti, castka_celkem, variabilni_symbol) VALUES (?,?,?,?,?,?,?,?)", (uid, full, kid, cid, dv, ds, tot, re.sub(r"\D", "", full)))
                     for _, r in ed.iterrows(): 
                         if r["Popis položky"]: run_command("INSERT INTO faktura_polozky (faktura_id, nazev, cena) VALUES (?,?,?)", (fid, r["Popis položky"], float(r["Cena"])))
-                    run_command("UPDATE kategorie SET aktualni_cislo = aktualni_cislo + 1 WHERE id = ?", (cid,)); reset_forms(); st.success("OK"); st.rerun()
+                    run_command("UPDATE kategorie SET aktualni_cislo = aktualni_cislo + 1 WHERE id = ?", (cid,)); reset_forms(); st.success("Faktura vystavena"); st.rerun()
 
-        # 5. VÝPIS
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # 5. VÝPIS A FILTR
         q = "SELECT f.*, k.jmeno FROM faktury f JOIN klienti k ON f.klient_id=k.id WHERE f.user_id=?"
         p = [uid]
         if sel_cli != "Všichni": q += " AND k.jmeno=?"; p.append(sel_cli)
@@ -418,7 +418,7 @@ else:
     elif "Nastavení" in menu:
         st.header("Nastavení")
         
-        # 1. LICENCE INFO & AKTIVACE
+        # 1. LICENCE
         with st.expander("🔑 Licence & Předplatné", expanded=True):
             valid, exp_date = check_license_validity(uid)
             status_color = "text-green" if valid else "text-red"
@@ -436,7 +436,6 @@ else:
                 st.info("💡 Pro zakoupení licence napište na: **jsem@michalkochtik.cz**")
                 lic_key = st.text_input("Máte klíč? Zadejte ho zde:")
                 if st.button("Aktivovat klíč"):
-                    # Check v DB klíčů
                     k_db = run_query("SELECT * FROM licencni_klice WHERE kod=? AND pouzito_uzivatelem_id IS NULL", (lic_key,), single=True)
                     if k_db:
                         new_exp = date.today() + timedelta(days=k_db['dny_platnosti'])
@@ -473,7 +472,6 @@ else:
                     run_command("UPDATE nastaveni SET notify_active=?, notify_email=?, smtp_server=?, smtp_port=?, smtp_email=?, smtp_password=? WHERE id=?", (int(act), ne, ss, sp, se, sw, c.get('id'))); st.success("Uloženo")
             
             with st.expander("💾 Zálohování dat"):
-                # EXPORT
                 def get_bk():
                     data={}
                     for t in ['nastaveni','klienti','kategorie','faktury','faktura_polozky']:
@@ -487,19 +485,16 @@ else:
                     return json.dumps(data, default=str)
                 st.download_button("⬇️ Stáhnout zálohu (JSON)", get_bk(), "zaloha.json", "application/json")
                 
-                # IMPORT
                 upl = st.file_uploader("⬆️ Obnovit ze zálohy", type="json")
                 if upl and st.button("Spustit obnovu"):
                     try:
                         data = json.load(upl)
-                        # CLEANUP OLD DATA
                         run_command("DELETE FROM nastaveni WHERE user_id=?", (uid,))
                         run_command("DELETE FROM klienti WHERE user_id=?", (uid,))
                         run_command("DELETE FROM kategorie WHERE user_id=?", (uid,))
                         faktury_ids = run_query("SELECT id FROM faktury WHERE user_id=?", (uid,))
                         for f in faktury_ids: run_command("DELETE FROM faktura_polozky WHERE faktura_id=?", (f['id'],))
                         run_command("DELETE FROM faktury WHERE user_id=?", (uid,))
-                        # INSERT NEW
                         for row in data.get('nastaveni', []):
                             run_command("INSERT INTO nastaveni (user_id, nazev, adresa, ico, dic, ucet, banka, email, telefon, iban) VALUES (?,?,?,?,?,?,?,?,?,?)", (uid, row.get('nazev'), row.get('adresa'), row.get('ico'), row.get('dic'), row.get('ucet'), row.get('banka'), row.get('email'), row.get('telefon'), row.get('iban')))
                         for row in data.get('klienti', []):
