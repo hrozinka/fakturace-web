@@ -20,8 +20,8 @@ SYSTEM_EMAIL = {
     "enabled": False, 
     "server": "smtp.seznam.cz",
     "port": 465,
-    "email": "vas-email@seznam.cz",
-    "password": "vase-heslo"
+    "email": "jsem@michalkochtik.cz",
+    "password": "Miki+420"
 }
 
 # --- 1. KONFIGURACE A CSS ---
@@ -136,7 +136,7 @@ def check_license_online(key):
     try:
         # !!! ZDE UPRAVTE URL NA SVOU 'RAW' ADRESU GISTU !!!
         # Příklad: https://gist.githubusercontent.com/UZIVATEL/HASH/raw/licence.json
-        url = f"https://gist.github.com/hrozinka/licence.json?t={int(datetime.now().timestamp())}"
+        url = f"https://gist.githubusercontent.com/hrozinka/6cd3ef1eea1e6d7dc7b188bdbeb84235/raw/dbd8a4bb338c809de0af148e4adbc859a495af7f/licence.json?t={int(datetime.now().timestamp())}"
         
         r = requests.get(url, timeout=3)
         if r.status_code == 200:
@@ -694,4 +694,5 @@ else:
                     run_command("DELETE FROM faktury WHERE id=? AND user_id=?", (r['id'], uid))
                     run_command("DELETE FROM faktura_polozky WHERE faktura_id=?", (r['id'],))
                     st.rerun()
+
 
