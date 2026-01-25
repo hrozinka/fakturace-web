@@ -5,3 +5,4 @@ requests
 qrcode
 urllib3
 Pillow
+openpyxl
