@@ -17,7 +17,7 @@ from PIL import Image
 
 # --- 0. NASTAVENÍ SYSTÉMU ---
 SYSTEM_EMAIL = {
-    "enabled": False, 
+    "enabled": True, 
     "server": "smtp.seznam.cz",
     "port": 465,
     "email": "jsem@michalkochtik.cz",
@@ -694,5 +694,6 @@ else:
                     run_command("DELETE FROM faktury WHERE id=? AND user_id=?", (r['id'], uid))
                     run_command("DELETE FROM faktura_polozky WHERE faktura_id=?", (r['id'],))
                     st.rerun()
+
 
 
