@@ -20,8 +20,8 @@ SYSTEM_EMAIL = {
     "enabled": False, 
     "server": "smtp.seznam.cz",
     "port": 465,
-    "email": "jsem@michalkochtik.cz",
-    "password": "Miki+420"
+    "email": "vas-email@seznam.cz",
+    "password": "vase-heslo"
 }
 
 # --- 1. KONFIGURACE A CSS ---
@@ -38,11 +38,15 @@ st.markdown("""
     
     /* STATS BOXY */
     .mini-stat-container { display: flex; gap: 10px; margin-bottom: 20px; margin-top: 10px; justify-content: space-between; }
-    .mini-stat-box { background-color: #1f2937; border: 1px solid #374151; border-radius: 8px; padding: 10px; text-align: center; width: 100%; }
-    .mini-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #9ca3af; margin-bottom: 4px; }
-    .mini-val-green { font-size: 18px; font-weight: 700; color: #6ee7b7; }
-    .mini-val-gray { font-size: 18px; font-weight: 700; color: #d1d5db; }
-    .mini-val-red { font-size: 18px; font-weight: 700; color: #f87171; }
+    .mini-stat-box { background-color: #1f2937; border: 1px solid #374151; border-radius: 8px; padding: 15px; text-align: center; width: 100%; }
+    .mini-label { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #9ca3af; margin-bottom: 5px; }
+    .mini-val-green { font-size: 22px; font-weight: 700; color: #6ee7b7; }
+    .mini-val-gray { font-size: 22px; font-weight: 700; color: #d1d5db; }
+    .mini-val-red { font-size: 22px; font-weight: 700; color: #f87171; }
+    
+    /* MENŠÍ BOXY PRO FILTR */
+    .small-box { padding: 8px !important; }
+    .small-val { font-size: 16px !important; }
 
     .auth-container { max-width: 500px; margin: 0 auto; padding: 40px 20px; background: #1f2937; border-radius: 10px; border: 1px solid #374151; }
     .promo-box { border: 2px solid #eab308; background-color: #422006; padding: 15px; border-radius: 10px; margin-bottom: 20px; text-align: center; }
@@ -76,12 +80,16 @@ def init_db():
         last_active TEXT
     )''')
     
-    try:
-        c.execute("ALTER TABLE users ADD COLUMN last_active TEXT")
+    try: c.execute("ALTER TABLE users ADD COLUMN last_active TEXT")
     except: pass
     
     c.execute('''CREATE TABLE IF NOT EXISTS nastaveni (id INTEGER PRIMARY KEY, user_id INTEGER, nazev TEXT, adresa TEXT, ico TEXT, dic TEXT, ucet TEXT, banka TEXT, email TEXT, telefon TEXT, iban TEXT, smtp_server TEXT, smtp_port INTEGER, smtp_email TEXT, smtp_password TEXT, notify_email TEXT, notify_days INTEGER, notify_active INTEGER)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS klienti (id INTEGER PRIMARY KEY, user_id INTEGER, jmeno TEXT, adresa TEXT, ico TEXT, dic TEXT, email TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS klienti (id INTEGER PRIMARY KEY, user_id INTEGER, jmeno TEXT, adresa TEXT, ico TEXT, dic TEXT, email TEXT, poznamka TEXT)''')
+    
+    # Migrace pro poznámku
+    try: c.execute("ALTER TABLE klienti ADD COLUMN poznamka TEXT")
+    except: pass
+
     c.execute('''CREATE TABLE IF NOT EXISTS kategorie (id INTEGER PRIMARY KEY, user_id INTEGER, nazev TEXT, barva TEXT, prefix TEXT, aktualni_cislo INTEGER DEFAULT 1, logo_blob BLOB)''')
     c.execute('''CREATE TABLE IF NOT EXISTS faktury (id INTEGER PRIMARY KEY, user_id INTEGER, cislo INTEGER, cislo_full TEXT, klient_id INTEGER, kategorie_id INTEGER, datum_vystaveni TEXT, datum_duzp TEXT, datum_splatnosti TEXT, castka_celkem REAL, zpusob_uhrady TEXT, variabilni_symbol TEXT, cislo_objednavky TEXT, uvodni_text TEXT, uhrazeno INTEGER DEFAULT 0, muj_popis TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS faktura_polozky (id INTEGER PRIMARY KEY, faktura_id INTEGER, nazev TEXT, cena REAL)''')
@@ -461,10 +469,29 @@ else:
                 with st.form(f"cf_{rid}", clear_on_submit=True):
                     j=st.text_input("Jméno", ad.get('jmeno','')); a=st.text_area("Adresa", ad.get('adresa',''))
                     k1,k2=st.columns(2); i=k1.text_input("IČ", ad.get('ico','')); d=k2.text_input("DIČ", ad.get('dic',''))
-                    if st.form_submit_button("Uložit"): run_command("INSERT INTO klienti (user_id, jmeno, adresa, ico, dic) VALUES (?,?,?,?,?)", (uid,j,a,i,d)); reset_forms(); st.rerun()
+                    poz=st.text_area("Poznámka (interní)")
+                    if st.form_submit_button("Uložit"): run_command("INSERT INTO klienti (user_id, jmeno, adresa, ico, dic, poznamka) VALUES (?,?,?,?,?,?)", (uid,j,a,i,d,poz)); reset_forms(); st.rerun()
+        
         for r in run_query("SELECT * FROM klienti WHERE user_id=?", (uid,)):
             with st.expander(r['jmeno']):
-                if st.button("Smazat", key=f"delc_{r['id']}"): run_command("DELETE FROM klienti WHERE id=?", (r['id'],)); st.rerun()
+                if r.get('poznamka'): st.info(f"ℹ️ {r['poznamka']}")
+                
+                # UPDATE CLIENT
+                k_edit_key = f"k_edit_{r['id']}"
+                if k_edit_key not in st.session_state: st.session_state[k_edit_key] = False
+                
+                c1, c2 = st.columns(2)
+                if c1.button("✏️ Upravit", key=f"bek_{r['id']}"): st.session_state[k_edit_key] = True; st.rerun()
+                if c2.button("Smazat", key=f"delc_{r['id']}"): run_command("DELETE FROM klienti WHERE id=?", (r['id'],)); st.rerun()
+                
+                if st.session_state[k_edit_key]:
+                    with st.form(f"fedk_{r['id']}"):
+                        ej=st.text_input("Jméno", r['jmeno']); ea=st.text_area("Adresa", r['adresa'])
+                        ek1,ek2=st.columns(2); ei=ek1.text_input("IČ", r['ico']); ed=ek2.text_input("DIČ", r['dic'])
+                        epoz=st.text_area("Poznámka", r['poznamka'] or "")
+                        if st.form_submit_button("Uložit změny"):
+                            run_command("UPDATE klienti SET jmeno=?, adresa=?, ico=?, dic=?, poznamka=? WHERE id=?", (ej,ea,ei,ed,epoz,r['id']))
+                            st.session_state[k_edit_key] = False; st.rerun()
 
     elif menu == "Kategorie":
         st.header("🏷️ Kategorie")
@@ -482,15 +509,43 @@ else:
         
         for r in run_query("SELECT * FROM kategorie WHERE user_id=?", (uid,)):
             with st.expander(r['nazev']):
-                if is_pro:
-                    if st.button("Smazat", key=f"dk_{r['id']}"): run_command("DELETE FROM kategorie WHERE id=?", (r['id'],)); st.rerun()
-                else: st.write("Výchozí kategorie.")
+                # UPDATE KATEGORIE
+                cat_edit_key = f"cat_edit_{r['id']}"
+                if cat_edit_key not in st.session_state: st.session_state[cat_edit_key] = False
+                
+                c1, c2 = st.columns(2)
+                if c1.button("✏️ Upravit", key=f"bec_{r['id']}"): st.session_state[cat_edit_key] = True; st.rerun()
+                if is_pro and c2.button("Smazat", key=f"dk_{r['id']}"): run_command("DELETE FROM kategorie WHERE id=?", (r['id'],)); st.rerun()
+                
+                if st.session_state[cat_edit_key]:
+                    with st.form(f"fedc_{r['id']}"):
+                        en=st.text_input("Název", r['nazev']); ep=st.text_input("Prefix", r['prefix'])
+                        es=st.number_input("Aktuální číslo", value=r['aktualni_cislo']); ec=st.color_picker("Barva", r['barva'])
+                        if st.form_submit_button("Uložit změny"):
+                            run_command("UPDATE kategorie SET nazev=?, prefix=?, aktualni_cislo=?, barva=? WHERE id=?", (en,ep,es,ec,r['id']))
+                            st.session_state[cat_edit_key] = False; st.rerun()
 
     elif menu == "Faktury":
         import pandas as pd
         st.header("📊 Faktury")
         
-        # 1. ČÁST: PŘIDÁNÍ FAKTURY (POSUNUTO NAHORU)
+        # 0. ČÁST: GLOBÁLNÍ STATISTIKY (VŠECHNY) - NAHOŘE
+        cy = datetime.now().year
+        sc_all = run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=? AND strftime('%Y', datum_vystaveni) = ?", (uid, str(cy)), True)[0] or 0
+        su_all = run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=? AND uhrazeno = 0 AND strftime('%Y', datum_vystaveni) = ?", (uid, str(cy)), True)[0] or 0
+        sh_all = run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=?", (uid,), True)[0] or 0
+        
+        st.markdown(f"""
+        <div class="mini-stat-container">
+            <div class="mini-stat-box"><div class="mini-label">Fakturováno {cy} (VŠE)</div><div class="mini-val-green">{sc_all:,.0f} Kč</div></div>
+            <div class="mini-stat-box"><div class="mini-label">Celkem Historie (VŠE)</div><div class="mini-val-gray">{sh_all:,.0f} Kč</div></div>
+            <div class="mini-stat-box"><div class="mini-label">Neuhrazeno (VŠE)</div><div class="mini-val-red">{su_all:,.0f} Kč</div></div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.divider()
+
+        # 1. ČÁST: PŘIDÁNÍ FAKTURY
         if not is_pro and cnt_inv >= 5: st.error(f"🔒 FREE Limit: {cnt_inv}/5 faktur.")
         else:
             rid = st.session_state.form_reset_id
@@ -534,32 +589,27 @@ else:
         client_opts = ["Všichni"] + [c['jmeno'] for c in all_clients]
         sel_client = st.selectbox("Filtr podle klienta", client_opts)
 
-        # 3. ČÁST: STATISTIKY (FILTROVANÉ)
-        cy = datetime.now().year
-        params_base = [uid]
-        sql_filter = ""
-        
+        # 3. ČÁST: STATISTIKY (FILTROVANÉ - MENŠÍ)
         if sel_client != "Všichni":
+            params_base = [uid, sel_client]
             sql_filter = " AND k.jmeno = ?"
-            params_base.append(sel_client)
-        
-        # Výpočet s JOINem pro filtrování
-        q_sc = f"SELECT SUM(f.castka_celkem) FROM faktury f JOIN klienti k ON f.klient_id = k.id WHERE f.user_id=? {sql_filter} AND strftime('%Y', f.datum_vystaveni) = ?"
-        sc = run_query(q_sc, tuple(params_base + [str(cy)]), True)[0] or 0
-        
-        q_su = f"SELECT SUM(f.castka_celkem) FROM faktury f JOIN klienti k ON f.klient_id = k.id WHERE f.user_id=? {sql_filter} AND f.uhrazeno = 0 AND strftime('%Y', f.datum_vystaveni) = ?"
-        su = run_query(q_su, tuple(params_base + [str(cy)]), True)[0] or 0
-        
-        q_sh = f"SELECT SUM(f.castka_celkem) FROM faktury f JOIN klienti k ON f.klient_id = k.id WHERE f.user_id=? {sql_filter}"
-        sh = run_query(q_sh, tuple(params_base), True)[0] or 0
-        
-        st.markdown(f"""
-        <div class="mini-stat-container">
-            <div class="mini-stat-box"><div class="mini-label">Fakturováno {cy}</div><div class="mini-val-green">{sc:,.0f} Kč</div></div>
-            <div class="mini-stat-box"><div class="mini-label">Celkem Historie</div><div class="mini-val-gray">{sh:,.0f} Kč</div></div>
-            <div class="mini-stat-box"><div class="mini-label">Neuhrazeno</div><div class="mini-val-red">{su:,.0f} Kč</div></div>
-        </div>
-        """, unsafe_allow_html=True)
+            
+            q_sc = f"SELECT SUM(f.castka_celkem) FROM faktury f JOIN klienti k ON f.klient_id = k.id WHERE f.user_id=? {sql_filter} AND strftime('%Y', f.datum_vystaveni) = ?"
+            sc = run_query(q_sc, tuple(params_base + [str(cy)]), True)[0] or 0
+            
+            q_su = f"SELECT SUM(f.castka_celkem) FROM faktury f JOIN klienti k ON f.klient_id = k.id WHERE f.user_id=? {sql_filter} AND f.uhrazeno = 0 AND strftime('%Y', f.datum_vystaveni) = ?"
+            su = run_query(q_su, tuple(params_base + [str(cy)]), True)[0] or 0
+            
+            q_sh = f"SELECT SUM(f.castka_celkem) FROM faktury f JOIN klienti k ON f.klient_id = k.id WHERE f.user_id=? {sql_filter}"
+            sh = run_query(q_sh, tuple(params_base), True)[0] or 0
+            
+            st.markdown(f"""
+            <div class="mini-stat-container">
+                <div class="mini-stat-box small-box"><div class="mini-label">Fakturováno {cy} ({sel_client})</div><div class="mini-val-green small-val">{sc:,.0f} Kč</div></div>
+                <div class="mini-stat-box small-box"><div class="mini-label">Celkem Historie</div><div class="mini-val-gray small-val">{sh:,.0f} Kč</div></div>
+                <div class="mini-stat-box small-box"><div class="mini-label">Neuhrazeno</div><div class="mini-val-red small-val">{su:,.0f} Kč</div></div>
+            </div>
+            """, unsafe_allow_html=True)
 
         st.divider()
 
