@@ -16,12 +16,11 @@ from email.mime.multipart import MIMEMultipart
 from PIL import Image
 
 # --- 0. NASTAVENÍ SYSTÉMU ---
-# ZMĚNA: Heslo se načítá z bezpečného úložiště (st.secrets) nebo proměnných prostředí
-# Návod: Vytvořte soubor .streamlit/secrets.toml a vložte do něj: EMAIL_PASSWORD = "VaseHeslo"
+# Zabezpečení hesla (zachováno z minulé úpravy)
 try:
     email_password = st.secrets["EMAIL_PASSWORD"]
 except:
-    email_password = os.getenv("EMAIL_PASSWORD", "") # Fallback, pokud secrets neexistují
+    email_password = os.getenv("EMAIL_PASSWORD", "")
 
 SYSTEM_EMAIL = {
     "enabled": True, 
@@ -31,59 +30,97 @@ SYSTEM_EMAIL = {
     "password": email_password 
 }
 
-# --- 1. KONFIGURACE A CSS ---
-st.set_page_config(page_title="Fakturační Systém", page_icon="🧾", layout="centered")
+# --- 1. KONFIGURACE A CSS (UPRAVENO PRO RESPONZIVITU A TMAVÁ TLAČÍTKA) ---
+# ZMĚNA: layout="wide" pro lepší využití místa na velkých obrazovkách
+st.set_page_config(page_title="Fakturační Systém", page_icon="🧾", layout="wide")
 
 st.markdown("""
     <style>
-    /* ZMĚNA: Hlavní pozadí a text */
+    /* HLAVNÍ POZADÍ */
     .stApp { background-color: #0e1117; color: #ffffff; }
     
-    /* Vstupy (Inputy) */
-    .stTextInput input, .stNumberInput input, .stTextArea textarea, .stDateInput input, .stSelectbox div[data-baseweb="select"] {
-        background-color: #262730 !important; 
-        border: 1px solid #4f4f4f !important; 
-        color: #ffffff !important;
+    /* VSTUPNÍ POLE - PLNĚ TMAVÁ */
+    .stTextInput input, .stNumberInput input, .stTextArea textarea, .stDateInput input, 
+    .stSelectbox div[data-baseweb="select"] {
+        background-color: #1f2937 !important; 
+        border: 1px solid #374151 !important; 
+        color: #e5e7eb !important;
+        border-radius: 6px;
+    }
+    .stTextInput input:focus, .stTextArea textarea:focus {
+        border-color: #eab308 !important;
     }
     
-    /* Expandery */
-    div[data-testid="stExpander"] { background-color: #262730 !important; border: 1px solid #4f4f4f; border-radius: 8px; margin-bottom: 8px; }
-    div[data-testid="stExpander"] details summary { color: #ffffff !important; }
+    /* EXPANDERY */
+    div[data-testid="stExpander"] { 
+        background-color: #1f2937 !important; 
+        border: 1px solid #374151; 
+        border-radius: 8px; 
+        margin-bottom: 8px; 
+    }
+    div[data-testid="stExpander"] details summary { color: #e5e7eb !important; }
     
-    /* ZMĚNA: Oprava tlačítek (UI/UX) - aby nesvítila bíle */
+    /* --- ZMĚNA: TMAVÁ TLAČÍTKA (Sjednocený design) --- */
     .stButton > button {
-        background-color: #262730 !important;
-        color: #ffffff !important;
-        border: 1px solid #4f4f4f !important;
-        transition: all 0.3s ease;
+        background-color: #1f2937 !important;  /* Tmavé pozadí */
+        color: #e5e7eb !important;            /* Světlý text */
+        border: 1px solid #374151 !important; /* Jemný okraj */
+        border-radius: 6px;
+        transition: all 0.2s ease-in-out;
+        width: 100%; /* Na mobilu lepší pro klikání */
     }
     .stButton > button:hover {
-        border-color: #eab308 !important;
+        border-color: #eab308 !important;     /* Zlatý okraj při najetí */
         color: #eab308 !important;
-        background-color: #1f2937 !important;
+        background-color: #111827 !important; /* Ještě tmavší pozadí */
     }
     .stButton > button:active {
-        background-color: #111827 !important;
+        background-color: #000000 !important;
     }
-    /* Primární tlačítka (např. Odeslat) */
+    
+    /* PRIMÁRNÍ TLAČÍTKA (např. Vystavit, Uložit) - Zlatá */
     div[data-testid="stForm"] button[kind="primary"], button[kind="primary"] {
         background-color: #eab308 !important;
         color: #000000 !important;
         border: none !important;
+        font-weight: bold !important;
+    }
+    div[data-testid="stForm"] button[kind="primary"]:hover {
+        background-color: #ca8a04 !important;
+    }
+
+    /* --- ZMĚNA: RESPONZIVNÍ STATISTIKY (Flexbox + Media Queries) --- */
+    .mini-stat-container { 
+        display: flex; 
+        gap: 15px; 
+        margin-bottom: 20px; 
+        margin-top: 10px; 
+        justify-content: space-between; 
+        flex-wrap: wrap; /* Důležité: zalomení na mobilu */
+    }
+    .mini-stat-box { 
+        background-color: #1f2937; 
+        border: 1px solid #374151; 
+        border-radius: 8px; 
+        padding: 20px; 
+        text-align: center; 
+        flex: 1;           /* Roztáhne se rovnoměrně */
+        min-width: 200px;  /* Minimální šířka před zalomením */
     }
     
-    /* STATS BOXY */
-    .mini-stat-container { display: flex; gap: 10px; margin-bottom: 20px; margin-top: 10px; justify-content: space-between; }
-    .mini-stat-box { background-color: #1f2937; border: 1px solid #374151; border-radius: 8px; padding: 15px; text-align: center; width: 100%; }
-    .mini-label { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #9ca3af; margin-bottom: 5px; }
-    .mini-val-green { font-size: 22px; font-weight: 700; color: #6ee7b7; }
-    .mini-val-gray { font-size: 22px; font-weight: 700; color: #d1d5db; }
-    .mini-val-red { font-size: 22px; font-weight: 700; color: #f87171; }
-    
-    /* MENŠÍ BOXY PRO FILTR */
-    .small-box { padding: 8px !important; }
-    .small-val { font-size: 16px !important; }
+    /* Úprava pro mobily (pokud je displej menší než 600px) */
+    @media only screen and (max-width: 600px) {
+        .mini-stat-box {
+            min-width: 100%; /* Box zabere celou šířku */
+            margin-bottom: 10px;
+        }
+    }
 
+    .mini-label { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #9ca3af; margin-bottom: 8px; }
+    .mini-val-green { font-size: 24px; font-weight: 700; color: #34d399; }
+    .mini-val-gray { font-size: 24px; font-weight: 700; color: #d1d5db; }
+    .mini-val-red { font-size: 24px; font-weight: 700; color: #f87171; }
+    
     .auth-container { max-width: 500px; margin: 0 auto; padding: 40px 20px; background: #1f2937; border-radius: 10px; border: 1px solid #374151; }
     .promo-box { border: 2px solid #eab308; background-color: #422006; padding: 15px; border-radius: 10px; margin-bottom: 20px; text-align: center; }
     .promo-link { color: #facc15; font-weight: bold; font-size: 18px; text-decoration: none; }
