@@ -31,85 +31,135 @@ SYSTEM_EMAIL = {
 
 DB_FILE = 'fakturace_v11_pro.db'
 
-# --- 1. DESIGN A CSS (TMAVÝ REŽIM + BLOKOVÉ MENU) ---
+# --- 1. DESIGN A UI/UX (CSS MAGIC) ---
 st.set_page_config(page_title="Fakturační Systém", page_icon="🧾", layout="centered")
 
 st.markdown("""
     <style>
-    /* === HLAVNÍ POZADÍ === */
-    .stApp { background-color: #0e1117; color: #e5e7eb; }
+    /* === GLOBÁLNÍ RESET A POZADÍ === */
+    .stApp { background-color: #111827; color: #f3f4f6; font-family: 'Segoe UI', sans-serif; }
     
-    /* === INPUTY (Tmavé) === */
+    /* === DESIGN VSTUPNÍCH POLÍ === */
     .stTextInput input, .stNumberInput input, .stTextArea textarea, .stDateInput input, 
     .stSelectbox div[data-baseweb="select"] {
         background-color: #1f2937 !important; 
         border: 1px solid #374151 !important; 
-        color: #e5e7eb !important;
-        border-radius: 6px;
+        color: #f3f4f6 !important;
+        border-radius: 10px !important;
+        padding: 10px !important;
+    }
+    .stTextInput input:focus, .stTextArea textarea:focus {
+        border-color: #eab308 !important; /* Zlatý focus */
+        box-shadow: 0 0 0 1px #eab308 !important;
+    }
+
+    /* === MODERNI MENU (PRESTYLOVANE RADIO BUTTONY) === */
+    /* Skryjeme standardní kroužky */
+    section[data-testid="stSidebar"] .stRadio div[role="radiogroup"] > label > div:first-child {
+        display: none !important;
     }
     
-    /* === EXPANDERY === */
-    div[data-testid="stExpander"] {
-        background-color: #1f2937 !important; border: 1px solid #374151 !important;
-        border-radius: 8px; color: #e5e7eb !important;
-    }
-    div[data-testid="stExpander"] details summary { color: #e5e7eb !important; }
-    div[data-testid="stExpander"] svg { fill: #e5e7eb !important; }
-
-    /* === MENU - VELKÉ BLOKY (SIDEBAR RADIO) === */
-    /* Skryjeme standardní kolečka (radio) a upravíme label */
-    section[data-testid="stSidebar"] .stRadio > div {
-        background-color: transparent;
-    }
+    /* Styl pro blok menu */
     section[data-testid="stSidebar"] .stRadio label {
-        background-color: #1f2937 !important; /* Tmavé pozadí bloku */
+        background-color: #1f2937 !important;
         padding: 15px 20px !important;
         margin-bottom: 8px !important;
-        border-radius: 8px !important;
+        border-radius: 12px !important;
         border: 1px solid #374151 !important;
         cursor: pointer;
-        transition: all 0.2s ease;
-        display: block; /* Roztáhnout */
-        color: #e5e7eb !important;
-        font-weight: 500;
-        text-align: center; /* Text uprostřed */
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-weight: 600 !important;
+        color: #9ca3af !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }
     
-    /* Efekt při najetí myší na blok menu */
+    /* Hover efekt */
     section[data-testid="stSidebar"] .stRadio label:hover {
-        border-color: #eab308 !important; /* Zlatý rámeček */
-        background-color: #2d3748 !important; /* Světlejší šedá */
+        background-color: #374151 !important;
         color: #eab308 !important;
+        transform: translateY(-2px);
     }
 
-    /* === TLAČÍTKA (VŠECHNA) === */
-    .stButton > button, div[data-testid="stDownloadButton"] > button, div[data-testid="stForm"] button {
+    /* Aktivní položka (vybraná) - Zlatá */
+    section[data-testid="stSidebar"] .stRadio label[data-checked="true"] {
+        background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%) !important;
+        color: #000000 !important;
+        border: none !important;
+        box-shadow: 0 10px 15px -3px rgba(234, 179, 8, 0.3);
+    }
+
+    /* === LOGIN KARTA (Centrovany box) === */
+    .login-container {
+        background-color: #1f2937;
+        padding: 40px;
+        border-radius: 20px;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+        border: 1px solid #374151;
+        text-align: center;
+        margin-top: 50px;
+    }
+    .login-header {
+        font-size: 28px;
+        font-weight: 800;
+        color: #eab308;
+        margin-bottom: 10px;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+    }
+    .login-sub { color: #9ca3af; margin-bottom: 30px; font-size: 14px; }
+
+    /* === TLAČÍTKA === */
+    .stButton > button {
         background-color: #1f2937 !important;
         color: #e5e7eb !important;
         border: 1px solid #374151 !important;
-        border-radius: 6px;
-        width: 100%;
+        border-radius: 8px;
+        padding: 0.5rem 1rem;
+        transition: all 0.2s;
+        font-weight: 600;
     }
-    .stButton > button:hover, div[data-testid="stDownloadButton"] > button:hover {
+    .stButton > button:hover {
         border-color: #eab308 !important;
         color: #eab308 !important;
-        background-color: #111827 !important;
     }
-    /* Primární tlačítka (Zlatá) */
+    /* Primární tlačítka (Login, Uložit) */
     div[data-testid="stForm"] button[kind="primary"], button[kind="primary"] {
-        background-color: #eab308 !important; color: #000000 !important; border: none !important; font-weight: bold !important;
+        background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%) !important;
+        color: #111827 !important;
+        border: none !important;
+        box-shadow: 0 4px 6px rgba(234, 179, 8, 0.2);
     }
-    div[data-testid="stForm"] button[kind="primary"]:hover { background-color: #ca8a04 !important; }
+    div[data-testid="stForm"] button[kind="primary"]:hover {
+        box-shadow: 0 10px 15px rgba(234, 179, 8, 0.4);
+        transform: translateY(-1px);
+    }
 
     /* === STATISTIKY === */
-    .mini-stat-container { display: flex; gap: 10px; margin-bottom: 20px; justify-content: space-between; flex-wrap: wrap; }
-    .mini-stat-box { background-color: #1f2937; border: 1px solid #374151; border-radius: 8px; padding: 15px; text-align: center; flex: 1; min-width: 150px; }
-    .mini-label { font-size: 11px; text-transform: uppercase; color: #9ca3af; margin-bottom: 5px; }
-    .mini-val-green { font-size: 20px; font-weight: 700; color: #34d399; }
-    .mini-val-red { font-size: 20px; font-weight: 700; color: #f87171; }
-
-    .auth-container { max-width: 500px; margin: 0 auto; padding: 40px 20px; background: #1f2937; border-radius: 10px; border: 1px solid #374151; }
-    .promo-box { border: 2px solid #eab308; background-color: #422006; padding: 10px; border-radius: 8px; margin-bottom: 15px; text-align: center; }
+    .mini-stat-container { display: flex; gap: 15px; margin-bottom: 25px; }
+    .mini-stat-box { 
+        background: #1f2937; 
+        border-radius: 12px; 
+        padding: 20px; 
+        flex: 1; 
+        text-align: center; 
+        border: 1px solid #374151;
+        transition: transform 0.2s;
+    }
+    .mini-stat-box:hover { transform: translateY(-3px); border-color: #eab308; }
+    
+    .mini-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #9ca3af; margin-bottom: 5px; }
+    .mini-val-green { font-size: 26px; font-weight: 800; color: #34d399; }
+    .mini-val-red { font-size: 26px; font-weight: 800; color: #f87171; }
+    
+    /* === EXPENDERY === */
+    div[data-testid="stExpander"] {
+        background-color: #1f2937 !important;
+        border: 1px solid #374151 !important;
+        border-radius: 12px !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -188,7 +238,7 @@ def get_ares_data(ico):
     urllib3.disable_warnings()
     if not ico: return None
     
-    # 1. Čištění IČO (jen čísla, doplnit nuly na 8 znaků)
+    # Čištění IČO
     ico_clean = "".join(filter(str.isdigit, str(ico)))
     if len(ico_clean) == 0: return None
     ico_final = ico_clean.zfill(8)
@@ -317,32 +367,54 @@ def reset_forms():
     st.session_state.form_reset_id += 1; st.session_state.ares_data = {}
     st.session_state.items_df = pd.DataFrame(columns=["Popis položky", "Cena"])
 
-# --- 8. LOGIN / AUTH ---
+# --- 8. LOGIN / AUTH (UPRAVENÝ DESIGN) ---
 if not st.session_state.user_id:
-    st.markdown("<div class='auth-container'><h1 style='text-align:center'>Fakturace Online</h1>", unsafe_allow_html=True)
-    t1, t2 = st.tabs(["🔐 Přihlášení", "📝 Registrace"])
-    with t1:
-        with st.form("login_form"):
-            u = st.text_input("Login"); p = st.text_input("Heslo", type="password")
-            if st.form_submit_button("Přihlásit se", type="primary"):
-                res = run_query("SELECT * FROM users WHERE username=? AND password_hash=?", (u, hash_password(p)), single=True)
-                if res:
-                    st.session_state.user_id = res['id']; st.session_state.username = res['username']
-                    st.session_state.role = res['role']; st.session_state.full_name = res['full_name']
-                    st.session_state.user_email = res['email']; st.session_state.is_pro = True if res['license_key'] else False
-                    run_command("UPDATE users SET last_active = ? WHERE id = ?", (datetime.now().isoformat(), res['id'])); st.rerun()
-                else: st.error("Chyba přihlášení.")
-    with t2:
-        with st.form("reg_form"):
-            fn = st.text_input("Jméno"); ln = st.text_input("Příjmení"); usr = st.text_input("Login"); mail = st.text_input("Email"); tel = st.text_input("Telefon"); p1 = st.text_input("Heslo", type="password"); p2 = st.text_input("Heslo znova", type="password")
-            if st.form_submit_button("Registrovat"):
-                if p1 != p2: st.error("Hesla se neshodují.")
-                else:
-                    try:
-                        fullname = f"{fn} {ln}".strip()
-                        run_command("INSERT INTO users (username, password_hash, full_name, email, phone, created_at, last_active) VALUES (?, ?, ?, ?, ?, ?, ?)", (usr, hash_password(p1), fullname, mail, tel, datetime.now().isoformat(), datetime.now().isoformat()))
-                        send_welcome_email(mail, fullname); st.success("Účet vytvořen!")
-                    except: st.error("Uživatel existuje.")
+    # Využijeme sloupce pro centrování
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        st.markdown("""
+        <div class="login-container">
+            <div style="font-size: 50px; margin-bottom: 10px;">🧾</div>
+            <div class="login-header">Fakturace Online</div>
+            <div class="login-sub">Profesionální systém pro vaše podnikání</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        tab_login, tab_reg = st.tabs(["🔐 Přihlášení", "📝 Registrace"])
+        
+        with tab_login:
+            st.markdown("<br>", unsafe_allow_html=True)
+            with st.form("login_form"):
+                u = st.text_input("Uživatelské jméno", placeholder="Váš login")
+                p = st.text_input("Heslo", type="password", placeholder="Vaše heslo")
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.form_submit_button("Přihlásit se", type="primary", use_container_width=True):
+                    res = run_query("SELECT * FROM users WHERE username=? AND password_hash=?", (u, hash_password(p)), single=True)
+                    if res:
+                        st.session_state.user_id = res['id']; st.session_state.username = res['username']
+                        st.session_state.role = res['role']; st.session_state.full_name = res['full_name']
+                        st.session_state.user_email = res['email']; st.session_state.is_pro = True if res['license_key'] else False
+                        run_command("UPDATE users SET last_active = ? WHERE id = ?", (datetime.now().isoformat(), res['id'])); st.rerun()
+                    else: st.error("Neplatné údaje.")
+
+        with tab_reg:
+            st.markdown("<br>", unsafe_allow_html=True)
+            with st.form("reg_form"):
+                c1, c2 = st.columns(2)
+                fn = c1.text_input("Jméno"); ln = c2.text_input("Příjmení")
+                usr = st.text_input("Login"); mail = st.text_input("Email")
+                tel = st.text_input("Telefon")
+                p1 = st.text_input("Heslo", type="password"); p2 = st.text_input("Heslo znova", type="password")
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.form_submit_button("Vytvořit účet", use_container_width=True):
+                    if p1 != p2: st.error("Hesla se neshodují.")
+                    else:
+                        try:
+                            fullname = f"{fn} {ln}".strip()
+                            run_command("INSERT INTO users (username, password_hash, full_name, email, phone, created_at, last_active) VALUES (?, ?, ?, ?, ?, ?, ?)", (usr, hash_password(p1), fullname, mail, tel, datetime.now().isoformat(), datetime.now().isoformat()))
+                            send_welcome_email(mail, fullname); st.success("Účet vytvořen! Přepněte na přihlášení.")
+                        except: st.error("Uživatel existuje.")
     st.stop()
 
 # --- 9. APP ---
@@ -350,8 +422,9 @@ uid = st.session_state.user_id; role = st.session_state.role; is_pro = st.sessio
 full_name_display = st.session_state.full_name or st.session_state.username
 run_command("UPDATE users SET last_active = ? WHERE id = ?", (datetime.now().isoformat(), uid))
 
-st.sidebar.markdown(f"👤 **{full_name_display}**")
-st.sidebar.caption(f"{'👑 ADMIN' if role=='admin' else ('⭐ PRO Verze' if is_pro else '🆓 FREE Verze')}")
+st.sidebar.markdown(f"<h3 style='text-align:center; color:#eab308; margin-top:0;'>Fakturace</h3>", unsafe_allow_html=True)
+st.sidebar.caption(f"<div style='text-align:center; margin-bottom:20px;'>{full_name_display}<br>{'👑 ADMIN' if role=='admin' else ('⭐ PRO Verze' if is_pro else '🆓 FREE Verze')}</div>", unsafe_allow_html=True)
+
 if st.sidebar.button("Odhlásit"): st.session_state.user_id = None; st.rerun()
 
 # --- ADMIN ---
@@ -368,13 +441,14 @@ if role == 'admin':
 
 # --- USER ---
 else:
-    # Hlavní menu (bloky v postranním panelu)
-    menu = st.sidebar.radio("Navigace", ["Faktury", "Klienti", "Kategorie", "Nastavení"], label_visibility="collapsed")
+    # Hlavní menu - POUŽITÍ EMOJI PRO HEZKÝ VZHLED V BLOCÍCH
+    menu = st.sidebar.radio(" ", ["📊 Faktury", "👥 Klienti", "🏷️ Kategorie", "⚙️ Nastavení"])
+    
     cnt_cli = run_query("SELECT COUNT(*) FROM klienti WHERE user_id=?", (uid,), single=True)[0]
     cnt_inv = run_query("SELECT COUNT(*) FROM faktury WHERE user_id=?", (uid,), single=True)[0]
 
     # --- NASTAVENÍ ---
-    if menu == "Nastavení":
+    if "Nastavení" in menu:
         st.header("⚙️ Nastavení")
         # Licence
         if not is_pro:
@@ -431,7 +505,7 @@ else:
                 st.download_button("Stáhnout zálohu", get_bk(), "zaloha.json", "application/json")
 
     # --- KLIENTI ---
-    elif menu == "Klienti":
+    elif "Klienti" in menu:
         st.header("👥 Klienti")
         if not is_pro and cnt_cli >= 3: st.error("Limit 3 klienti (FREE).")
         else:
@@ -455,7 +529,7 @@ else:
                 if st.button("Smazat", key=f"delc_{r['id']}"): run_command("DELETE FROM klienti WHERE id=?", (r['id'],)); st.rerun()
 
     # --- KATEGORIE ---
-    elif menu == "Kategorie":
+    elif "Kategorie" in menu:
         st.header("🏷️ Kategorie")
         if not is_pro:
             st.warning("Pouze pro PRO verzi."); chk = run_query("SELECT * FROM kategorie WHERE user_id=?", (uid,))
@@ -472,7 +546,7 @@ else:
                 if st.button("Smazat", key=f"dc_{cat['id']}"): run_command("DELETE FROM kategorie WHERE id=?", (cat['id'],)); st.rerun()
 
     # --- FAKTURY ---
-    elif menu == "Faktury":
+    elif "Faktury" in menu:
         st.header("📊 Faktury")
         cy = datetime.now().year
         sc = run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=? AND strftime('%Y', datum_vystaveni) = ?", (uid, str(cy)), True)[0] or 0
