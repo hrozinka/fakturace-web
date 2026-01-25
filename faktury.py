@@ -31,7 +31,7 @@ SYSTEM_EMAIL = {
 
 DB_FILE = 'fakturace_v11_pro.db'
 
-# --- 1. DESIGN A UI/UX (CSS UPRAVENO) ---
+# --- 1. DESIGN A UI/UX ---
 st.set_page_config(page_title="Fakturační Systém", page_icon="🧾", layout="centered")
 
 st.markdown("""
@@ -49,44 +49,41 @@ st.markdown("""
         padding: 10px !important;
     }
 
-    /* === OPRAVENÉ MENU (STEJNÁ DÉLKA + ČITELNOST) === */
-    /* 1. Skryjeme původní puntíky */
+    /* === MENU - BOXY (VYLEPŠENO PRO MOBIL) === */
     section[data-testid="stSidebar"] .stRadio div[role="radiogroup"] > label > div:first-child {
         display: none !important;
     }
     
-    /* 2. Styl pro samotný box (tlačítko) */
     section[data-testid="stSidebar"] .stRadio label {
-        width: 100% !important;             /* Roztáhnout na celou šířku */
-        display: flex !important;           /* Flexbox pro zarovnání */
-        justify-content: center !important; /* Text uprostřed */
-        align-items: center !important;
+        width: 100% !important;
+        display: flex !important;
+        justify-content: center !important; /* Centrování textu */
         background-color: #1f2937 !important;
-        padding: 16px 10px !important;      /* Větší padding pro lepší klikání */
-        margin-bottom: 10px !important;
+        padding: 18px 10px !important;      /* Vyšší boxy pro lepší klikání na mobilu */
+        margin-bottom: 12px !important;
         border-radius: 12px !important;
         border: 1px solid #374151 !important;
         cursor: pointer;
-        font-size: 16px !important;         /* Větší písmo pro čitelnost */
-        font-weight: 600 !important;        /* Tučnější text */
-        color: #e5e7eb !important;          /* Jasná barva textu */
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        box-sizing: border-box !important;  /* Aby padding nezvětšoval šířku přes okraj */
+        
+        /* TEXT - VYNUCENÁ SVĚTLÁ */
+        font-size: 17px !important;         
+        font-weight: 700 !important;        
+        color: #f3f4f6 !important;          /* Světle šedá až bílá */
+        text-align: center !important;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
     
-    /* 3. Hover efekt (najetí myší) */
+    /* Hover efekt */
     section[data-testid="stSidebar"] .stRadio label:hover {
-        background-color: #374151 !important;
         border-color: #eab308 !important;
         color: #eab308 !important;
     }
 
-    /* 4. Aktivní položka (vybraná) - Zlatá s černým textem (vysoký kontrast) */
+    /* Aktivní položka - Zlatá */
     section[data-testid="stSidebar"] .stRadio label[data-checked="true"] {
         background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%) !important;
-        color: #111827 !important;          /* Tmavý text na zlatém pozadí = čitelné */
+        color: #111827 !important;          /* Tmavý text na zlatém pro kontrast */
         border: none !important;
-        box-shadow: 0 4px 12px rgba(234, 179, 8, 0.4);
     }
 
     /* === LOGIN KARTA === */
@@ -96,7 +93,6 @@ st.markdown("""
         text-align: center; margin-top: 50px;
     }
     .login-header { font-size: 28px; font-weight: 800; color: #eab308; margin-bottom: 10px; text-transform: uppercase; }
-    .login-sub { color: #9ca3af; margin-bottom: 30px; font-size: 14px; }
 
     /* === TLAČÍTKA === */
     .stButton > button {
@@ -110,10 +106,10 @@ st.markdown("""
     }
 
     /* === STATISTIKY === */
-    .mini-stat-container { display: flex; gap: 15px; margin-bottom: 25px; }
-    .mini-stat-box { background: #1f2937; border-radius: 12px; padding: 20px; flex: 1; text-align: center; border: 1px solid #374151; }
-    .mini-val-green { font-size: 26px; font-weight: 800; color: #34d399; }
-    .mini-val-red { font-size: 26px; font-weight: 800; color: #f87171; }
+    .mini-stat-container { display: flex; gap: 15px; margin-bottom: 25px; flex-wrap: wrap; }
+    .mini-stat-box { background: #1f2937; border-radius: 12px; padding: 20px; flex: 1; text-align: center; border: 1px solid #374151; min-width: 140px; }
+    .mini-val-green { font-size: 24px; font-weight: 800; color: #34d399; }
+    .mini-val-red { font-size: 24px; font-weight: 800; color: #f87171; }
     
     /* === EXPANDERY === */
     div[data-testid="stExpander"] { background-color: #1f2937 !important; border: 1px solid #374151 !important; border-radius: 12px !important; }
@@ -320,7 +316,7 @@ def reset_forms():
     st.session_state.form_reset_id += 1; st.session_state.ares_data = {}
     st.session_state.items_df = pd.DataFrame(columns=["Popis položky", "Cena"])
 
-# --- 8. LOGIN / AUTH (UPRAVENÝ DESIGN) ---
+# --- 8. LOGIN / AUTH ---
 if not st.session_state.user_id:
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
@@ -391,7 +387,6 @@ if role == 'admin':
 
 # --- USER ---
 else:
-    # Hlavní menu
     menu = st.sidebar.radio(" ", ["📊 Faktury", "👥 Klienti", "🏷️ Kategorie", "⚙️ Nastavení"])
     
     cnt_cli = run_query("SELECT COUNT(*) FROM klienti WHERE user_id=?", (uid,), single=True)[0]
@@ -400,7 +395,6 @@ else:
     # --- NASTAVENÍ ---
     if "Nastavení" in menu:
         st.header("⚙️ Nastavení")
-        # Licence
         if not is_pro:
             st.markdown("""<div class='promo-box'><h3>🔓 Přejděte na PRO verzi</h3></div>""", unsafe_allow_html=True)
             with st.expander("Aktivovat licenci"):
@@ -413,7 +407,6 @@ else:
             with st.expander("🔑 Správa licence"):
                 if st.button("Deaktivovat licenci"): run_command("UPDATE users SET license_key=NULL WHERE id=?",(uid,)); st.session_state.is_pro=False; st.rerun()
         
-        # Firma
         c = run_query("SELECT * FROM nastaveni WHERE user_id=? LIMIT 1", (uid,), single=True) or {}
         with st.expander("🏢 Moje Firma", expanded=True):
             with st.form("setf"):
@@ -426,7 +419,6 @@ else:
                     else: run_command("INSERT INTO nastaveni (user_id, nazev, adresa, ico, dic, banka, ucet, iban, email, telefon) VALUES (?,?,?,?,?,?,?,?,?,?)", (uid,n,a,i,d,b,u,ib,em,ph))
                     st.rerun()
         
-        # SMTP
         if is_pro:
             with st.expander("🔔 SMTP Nastavení"):
                 act = st.toggle("Aktivní", value=bool(c.get('notify_active', 0)))
@@ -439,7 +431,6 @@ else:
                     run_command("UPDATE nastaveni SET notify_active=?, notify_email=?, smtp_server=?, smtp_port=?, smtp_email=?, smtp_password=? WHERE id=?", (int(act), ne, ss, sp, se, sw, c.get('id')))
                     st.success("Uloženo")
             
-            # Záloha
             with st.expander("💾 Záloha"):
                 def get_bk():
                     data={}
@@ -476,7 +467,22 @@ else:
         
         for r in run_query("SELECT * FROM klienti WHERE user_id=?", (uid,)):
             with st.expander(r['jmeno']):
-                if st.button("Smazat", key=f"delc_{r['id']}"): run_command("DELETE FROM klienti WHERE id=?", (r['id'],)); st.rerun()
+                # --- EDITACE KLIENTA (NÁVRAT) ---
+                k_edit_key = f"edit_k_{r['id']}"
+                if k_edit_key not in st.session_state: st.session_state[k_edit_key] = False
+                
+                c1, c2 = st.columns(2)
+                if c1.button("✏️ Upravit", key=f"bek_{r['id']}"): st.session_state[k_edit_key] = True; st.rerun()
+                if c2.button("Smazat", key=f"delc_{r['id']}"): run_command("DELETE FROM klienti WHERE id=?", (r['id'],)); st.rerun()
+                
+                if st.session_state[k_edit_key]:
+                    with st.form(f"frm_edit_k_{r['id']}"):
+                        ej=st.text_input("Jméno", r['jmeno']); ea=st.text_area("Adresa", r['adresa'])
+                        ek1,ek2=st.columns(2); ei=ek1.text_input("IČ", r['ico']); ed=ek2.text_input("DIČ", r['dic'])
+                        ep=st.text_area("Poznámka", r['poznamka'] or "")
+                        if st.form_submit_button("Uložit změny"):
+                            run_command("UPDATE klienti SET jmeno=?, adresa=?, ico=?, dic=?, poznamka=? WHERE id=?", (ej,ea,ei,ed,ep,r['id']))
+                            st.session_state[k_edit_key] = False; st.rerun()
 
     # --- KATEGORIE ---
     elif "Kategorie" in menu:
@@ -493,7 +499,21 @@ else:
         
         for cat in run_query("SELECT * FROM kategorie WHERE user_id=?", (uid,)):
             with st.expander(f"{cat['nazev']}"):
-                if st.button("Smazat", key=f"dc_{cat['id']}"): run_command("DELETE FROM kategorie WHERE id=?", (cat['id'],)); st.rerun()
+                # --- EDITACE KATEGORIE (NÁVRAT) ---
+                c_edit_key = f"edit_cat_{cat['id']}"
+                if c_edit_key not in st.session_state: st.session_state[c_edit_key] = False
+                
+                c1, c2 = st.columns(2)
+                if c1.button("✏️ Upravit", key=f"bec_{cat['id']}"): st.session_state[c_edit_key] = True; st.rerun()
+                if c2.button("Smazat", key=f"dc_{cat['id']}"): run_command("DELETE FROM kategorie WHERE id=?", (cat['id'],)); st.rerun()
+                
+                if st.session_state[c_edit_key]:
+                    with st.form(f"frm_ec_{cat['id']}"):
+                        en=st.text_input("Název", cat['nazev']); ep=st.text_input("Prefix", cat['prefix'])
+                        es=st.number_input("Číslo", value=cat['aktualni_cislo']); ec=st.color_picker("Barva", cat['barva'])
+                        if st.form_submit_button("Uložit změny"):
+                            run_command("UPDATE kategorie SET nazev=?, prefix=?, aktualni_cislo=?, barva=? WHERE id=?", (en,ep,es,ec,cat['id']))
+                            st.session_state[c_edit_key] = False; st.rerun()
 
     # --- FAKTURY ---
     elif "Faktury" in menu:
@@ -537,4 +557,35 @@ else:
                 pdf = generate_pdf(r['id'], uid, is_pro)
                 if isinstance(pdf, bytes): c2.download_button("PDF", pdf, f"{r['cislo_full']}.pdf", "application/pdf", key=f"p_{r['id']}")
                 else: c2.error("Chyba PDF")
-                if c3.button("Smazat", key=f"d_{r['id']}"): run_command("DELETE FROM faktury WHERE id=?", (r['id'],)); st.rerun()
+                
+                # --- EDITACE FAKTURY (NÁVRAT) ---
+                f_edit_key = f"edit_f_{r['id']}"
+                if f_edit_key not in st.session_state: st.session_state[f_edit_key] = False
+                
+                if c3.button("✏️ Upravit", key=f"bef_{r['id']}"): st.session_state[f_edit_key] = True; st.rerun()
+                
+                if st.session_state[f_edit_key]:
+                    st.markdown("---")
+                    st.write("**Editace faktury**")
+                    with st.form(f"frm_ef_{r['id']}"):
+                        ed1, ed2 = st.columns(2)
+                        new_date = ed1.date_input("Splatnost", pd.to_datetime(r['datum_splatnosti']))
+                        new_desc = ed2.text_input("Popis (interní)", r['muj_popis'] or "")
+                        
+                        # Načtení položek
+                        current_items = pd.read_sql("SELECT nazev as 'Popis položky', cena as 'Cena' FROM faktura_polozky WHERE faktura_id=?", get_db(), params=(r['id'],))
+                        edited_items = st.data_editor(current_items, num_rows="dynamic", use_container_width=True)
+                        
+                        if st.form_submit_button("Uložit změny"):
+                            new_tot = float(pd.to_numeric(edited_items["Cena"], errors='coerce').fillna(0).sum())
+                            # Update hlavičky
+                            run_command("UPDATE faktury SET datum_splatnosti=?, muj_popis=?, castka_celkem=? WHERE id=?", (new_date, new_desc, new_tot, r['id']))
+                            # Smazání starých položek
+                            run_command("DELETE FROM faktura_polozky WHERE faktura_id=?", (r['id'],))
+                            # Vložení nových
+                            for _, row in edited_items.iterrows():
+                                if row["Popis položky"]:
+                                    run_command("INSERT INTO faktura_polozky (faktura_id, nazev, cena) VALUES (?,?,?)", (r['id'], row["Popis položky"], float(row["Cena"])))
+                            st.session_state[f_edit_key] = False; st.rerun()
+                
+                if st.button("Smazat", key=f"d_{r['id']}"): run_command("DELETE FROM faktury WHERE id=?", (r['id'],)); st.rerun()
