@@ -134,17 +134,17 @@ def send_welcome_email(to_email, full_name):
 
 def check_license_online(key):
     try:
-        # !!! ZDE UPRAVTE URL NA SVOU 'RAW' ADRESU GISTU !!!
-        # Příklad: https://gist.githubusercontent.com/UZIVATEL/HASH/raw/licence.json
-        url = f"https://gist.githubusercontent.com/hrozinka/6cd3ef1eea1e6d7dc7b188bdbeb84235/raw/dbd8a4bb338c809de0af148e4adbc859a495af7f/licence.json?t={int(datetime.now().timestamp())}"
+        # URL vede na 'raw' verzi souboru licence.json ve vašem repozitáři
+        # timestamp (?t=...) zajišťuje, že se soubor nebude cachovat a načte se vždy aktuální verze
+        url = f"https://raw.githubusercontent.com/hrozinka/fakturace-web/refs/heads/main/licence.json?t={int(datetime.now().timestamp())}"
         
         r = requests.get(url, timeout=3)
         if r.status_code == 200:
             data = r.json()
+            # Pokud klíč existuje v JSONu, vrátíme True a datum, které je u klíče uložené
             if key in data:
-                # ZDE SE NAČÍTÁ DATUM PŘÍMO Z JSONU (hodnota klíče)
-                exp_date = data[key]
-                return True, "Aktivní", exp_date
+                datum_expirace = data[key]
+                return True, "Aktivní", datum_expirace
     except: pass
     return False, "Neplatný klíč", None
 
@@ -563,7 +563,6 @@ else:
         su_all = run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=? AND uhrazeno = 0 AND strftime('%Y', datum_vystaveni) = ?", (uid, str(cy)), True)[0] or 0
         sh_all = run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=?", (uid,), True)[0] or 0
         
-        # OPRAVA: POUŽITÍ PROMĚNNÝCH S _ALL
         st.markdown(f"""
         <div class="mini-stat-container">
             <div class="mini-stat-box"><div class="mini-label">Fakturováno {cy} (VŠE)</div><div class="mini-val-green">{sc_all:,.0f} Kč</div></div>
@@ -694,6 +693,3 @@ else:
                     run_command("DELETE FROM faktury WHERE id=? AND user_id=?", (r['id'], uid))
                     run_command("DELETE FROM faktura_polozky WHERE faktura_id=?", (r['id'],))
                     st.rerun()
-
-
-
