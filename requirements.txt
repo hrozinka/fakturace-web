@@ -1,0 +1,7 @@
+streamlit
+pandas
+fpdf
+requests
+qrcode
+urllib3
+Pillow
