@@ -36,7 +36,7 @@ SYSTEM_EMAIL = {
     "password": email_pass 
 }
 
-DB_FILE = 'fakturace_v25_pro.db'
+DB_FILE = 'fakturace_v26_pro.db'
 
 # --- 1. DESIGN (MOBILE FIRST) ---
 st.set_page_config(page_title="Fakturace Pro", page_icon="💎", layout="centered")
@@ -105,9 +105,11 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS nastaveni (id INTEGER PRIMARY KEY, user_id INTEGER, nazev TEXT, adresa TEXT, ico TEXT, dic TEXT, ucet TEXT, banka TEXT, email TEXT, telefon TEXT, iban TEXT, smtp_server TEXT, smtp_port INTEGER, smtp_email TEXT, smtp_password TEXT, notify_email TEXT, notify_days INTEGER, notify_active INTEGER)''')
     c.execute('''CREATE TABLE IF NOT EXISTS klienti (id INTEGER PRIMARY KEY, user_id INTEGER, jmeno TEXT, adresa TEXT, ico TEXT, dic TEXT, email TEXT, poznamka TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS kategorie (id INTEGER PRIMARY KEY, user_id INTEGER, nazev TEXT, barva TEXT, prefix TEXT, aktualni_cislo INTEGER DEFAULT 1, logo_blob BLOB)''')
+    
     c.execute('''CREATE TABLE IF NOT EXISTS faktury (id INTEGER PRIMARY KEY, user_id INTEGER, cislo INTEGER, cislo_full TEXT, klient_id INTEGER, kategorie_id INTEGER, datum_vystaveni TEXT, datum_duzp TEXT, datum_splatnosti TEXT, castka_celkem REAL, zpusob_uhrady TEXT, variabilni_symbol TEXT, cislo_objednavky TEXT, uvodni_text TEXT, uhrazeno INTEGER DEFAULT 0, muj_popis TEXT)''')
     try: c.execute("ALTER TABLE faktury ADD COLUMN cislo_full TEXT")
     except: pass
+    
     c.execute('''CREATE TABLE IF NOT EXISTS faktura_polozky (id INTEGER PRIMARY KEY, faktura_id INTEGER, nazev TEXT, cena REAL)''')
     c.execute('''CREATE TABLE IF NOT EXISTS licencni_klice (id INTEGER PRIMARY KEY, kod TEXT UNIQUE, dny_platnosti INTEGER, vygenerovano TEXT, pouzito_uzivatelem_id INTEGER, poznamka TEXT)''')
     
@@ -331,8 +333,6 @@ else:
     
     if "Faktury" in menu:
         st.header("Faktury")
-        
-        # 1. VELKÉ STATISTIKY (VŽDY VIDITELNÉ)
         years = [r[0] for r in run_query("SELECT DISTINCT strftime('%Y', datum_vystaveni) FROM faktury WHERE user_id=?", (uid,))]
         if str(datetime.now().year) not in years: years.append(str(datetime.now().year))
         sel_year = st.selectbox("Rok", sorted(list(set(years)), reverse=True))
@@ -342,7 +342,9 @@ else:
         su_a = run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=? AND uhrazeno=0", (uid,), True)[0] or 0
         st.markdown(f"<div class='stat-container'><div class='stat-box'><div class='stat-label'>OBRAT {sel_year}</div><div class='stat-value text-green'>{sc_y:,.0f} Kč</div></div><div class='stat-box'><div class='stat-label'>CELKEM</div><div class='stat-value text-gold'>{sc_a:,.0f} Kč</div></div><div class='stat-box'><div class='stat-label'>DLUŽÍ</div><div class='stat-value text-red'>{su_a:,.0f} Kč</div></div></div>", unsafe_allow_html=True)
         
-        # 2. PŘIDAT FAKTURU
+        clients = ["Všichni"] + [c['jmeno'] for c in run_query("SELECT jmeno FROM klienti WHERE user_id=?", (uid,))]
+        sel_cli = st.selectbox("Filtr", clients)
+        
         with st.expander("➕ Nová faktura"):
             kli = pd.read_sql("SELECT id, jmeno FROM klienti WHERE user_id=?", get_db(), params=(uid,))
             kat = pd.read_sql("SELECT id, nazev FROM kategorie WHERE user_id=?", get_db(), params=(uid,))
@@ -372,25 +374,16 @@ else:
                 else: st.warning("Vyberte data.")
 
         st.markdown("<br>", unsafe_allow_html=True)
-        
-        # 3. FILTR
-        clients = ["Všichni"] + [c['jmeno'] for c in run_query("SELECT jmeno FROM klienti WHERE user_id=?", (uid,))]
-        sel_cli = st.selectbox("Filtr", clients)
-        
-        # 4. MALÉ STATISTIKY (JEN PRO VYBRANÉHO KLIENTA)
-        if sel_cli != "Všichni":
-            sc_k = run_query("SELECT SUM(f.castka_celkem) FROM faktury f JOIN klienti k ON f.klient_id=k.id WHERE f.user_id=? AND k.jmeno=?", (uid, sel_cli), True)[0] or 0
-            su_k = run_query("SELECT SUM(f.castka_celkem) FROM faktury f JOIN klienti k ON f.klient_id=k.id WHERE f.user_id=? AND k.jmeno=? AND f.uhrazeno=0", (uid, sel_cli), True)[0] or 0
-            st.markdown(f"<div class='stat-container'><div class='stat-box'><div class='stat-label'>{sel_cli} CELKEM</div><div class='stat-value text-gold'>{sc_k:,.0f} Kč</div></div><div class='stat-box'><div class='stat-label'>{sel_cli} DLUŽÍ</div><div class='stat-value text-red'>{su_k:,.0f} Kč</div></div></div>", unsafe_allow_html=True)
-
-        # 5. SEZNAM FAKTUR
         q = "SELECT f.*, k.jmeno FROM faktury f JOIN klienti k ON f.klient_id=k.id WHERE f.user_id=?"; p = [uid]
         if sel_cli != "Všichni": q += " AND k.jmeno=?"; p.append(sel_cli)
         q += " ORDER BY f.id DESC LIMIT 50"
         
-        for r in pd.read_sql(q, get_db(), params=p).iterrows():
-            row = dict(r)
+        # --- OPRAVA ZDE ---
+        df_inv = pd.read_sql(q, get_db(), params=p)
+        for index, r in df_inv.iterrows():
+            row = r.to_dict()
             c_full = row.get('cislo_full') if row.get('cislo_full') else f"F{row['id']}"
+            
             with st.expander(f"{'✅' if row['uhrazeno'] else '⏳'} {c_full} | {row['jmeno']} | {row['castka_celkem']:.0f} Kč"):
                 c1,c2,c3 = st.columns([1,1,1])
                 if row['uhrazeno']: 
@@ -417,7 +410,8 @@ else:
                             run_command("UPDATE faktury SET datum_splatnosti=?, muj_popis=?, castka_celkem=? WHERE id=?", (nd, nm, ntot, row['id']))
                             run_command("DELETE FROM faktura_polozky WHERE faktura_id=?", (row['id'],))
                             for idx2, rw in ned.iterrows():
-                                iname = rw.get("Popis položky", ""); iprice = rw.get("Cena", 0.0)
+                                iname = rw.get("Popis položky", "")
+                                iprice = rw.get("Cena", 0.0)
                                 if iname:
                                     try: ip_float = float(iprice)
                                     except: ip_float = 0.0
@@ -447,7 +441,7 @@ else:
                 if k['poznamka']: st.info(k['poznamka'])
                 ekey = f"ek_{k['id']}"
                 if ekey not in st.session_state: st.session_state[ekey] = False
-                c1,c2 = st.columns(2)
+                c1,c2=st.columns(2)
                 if c1.button("✏️ Upravit", key=f"bek_{k['id']}"): st.session_state[ekey] = True; st.rerun()
                 if c2.button("Smazat", key=f"bdk_{k['id']}"): run_command("DELETE FROM klienti WHERE id=?",(k['id'],)); st.rerun()
                 if st.session_state[ekey]:
@@ -507,9 +501,7 @@ else:
                 if u['password_hash']==hash_password(p1): run_command("UPDATE users SET password_hash=? WHERE id=?",(hash_password(p2),uid)); st.success("OK")
                 else: st.error("Chyba")
 
-        # OPRAVA CHYBY ZDE (PŘIDÁNO OR {})
         c = run_query("SELECT * FROM nastaveni WHERE user_id=? LIMIT 1", (uid,), single=True) or {}
-        
         with st.expander("🏢 Moje Firma"):
             with st.form("setf"):
                 n=st.text_input("Název", c.get('nazev', full_name_display)); a=st.text_area("Adresa", c.get('adresa',''))
