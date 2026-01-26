@@ -40,7 +40,7 @@ SYSTEM_EMAIL = {
     "display_name": "MojeFakturace"
 }
 
-DB_FILE = 'fakturace_v34_pro.db'
+DB_FILE = 'fakturace_v35_pro.db'
 
 # --- 1. DESIGN (MOBILE FIRST) ---
 st.set_page_config(page_title="Fakturace Pro", page_icon="💎", layout="centered")
@@ -201,31 +201,41 @@ def send_welcome_email_db(to_email, full_name):
         return send_email_custom(to_email, subj, body)
     except: return False
 
-# --- GENERATOR PDF (ULTRA BEZPEČNÝ) ---
+# --- GENERATOR PDF (ROBUSTNÍ VERZE 3.5) ---
 def generate_pdf(faktura_id, uid, is_pro):
-    # Funkce pro bezpečný text (odstraní vše kromě základních znaků)
+    import qrcode
+    
+    # Funkce pro bezpečné odstranění diakritiky (aby PDF nespadlo)
     def clean_text(text):
         if not text: return ""
         text = str(text)
-        # Odstranění diakritiky
-        text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('ascii')
-        return text
+        # Normalizace a odstranění non-ascii znaků
+        return unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('ascii')
+
+    class PDF(FPDF):
+        def header(self):
+            # Standardní font Arial/Helvetica (bezpečný)
+            self.set_font('Arial', 'B', 24)
+            self.set_text_color(50, 50, 50)
+            self.cell(0, 10, 'FAKTURA', 0, 1, 'R')
+            self.ln(5)
 
     try:
+        # Načtení dat
         data = run_query("SELECT f.*, k.jmeno as k_jmeno, k.adresa as k_adresa, k.ico as k_ico, k.dic as k_dic, kat.barva, kat.logo_blob, kat.prefix FROM faktury f JOIN klienti k ON f.klient_id=k.id JOIN kategorie kat ON f.kategorie_id=kat.id WHERE f.id=? AND f.user_id=?", (faktura_id, uid), single=True)
         if not data: return None
         
         polozky = run_query("SELECT * FROM faktura_polozky WHERE faktura_id=?", (faktura_id,))
         moje = run_query("SELECT * FROM nastaveni WHERE user_id=? LIMIT 1", (uid,), single=True) or {}
         
-        pdf = FPDF()
+        pdf = PDF()
         pdf.add_page()
-        pdf.set_font('Arial', '', 10) # Standardní font (bez diakritiky)
+        pdf.set_font('Arial', '', 10)
 
         # Logo
         if data['logo_blob']:
             try:
-                fn = f"tmp_l_{faktura_id}.png"
+                fn = f"tmp_l_{faktura_id}_{random.randint(1,999)}.png"
                 with open(fn, "wb") as f: f.write(data['logo_blob'])
                 pdf.image(fn, 10, 10, 30)
                 os.remove(fn)
@@ -241,15 +251,7 @@ def generate_pdf(faktura_id, uid, is_pro):
 
         cislo_f = data['cislo_full'] if data['cislo_full'] else f"{data['prefix']}{data['cislo']}"
 
-        # HLAVIČKA
-        pdf.set_font('Arial', 'B', 24)
-        pdf.set_text_color(50, 50, 50)
-        pdf.cell(0, 10, 'FAKTURA', 0, 1, 'R')
-        pdf.ln(5)
-
-        # ADRESY
         pdf.set_text_color(100); pdf.set_y(40)
-        pdf.set_font('Arial', '', 10)
         pdf.cell(95, 5, "DODAVATEL:", 0, 0); pdf.cell(95, 5, "ODBERATEL:", 0, 1)
         pdf.set_text_color(0)
         
@@ -269,43 +271,41 @@ def generate_pdf(faktura_id, uid, is_pro):
         pdf.ln(10)
         pdf.set_fill_color(r, g, b); pdf.rect(10, pdf.get_y(), 190, 2, 'F'); pdf.ln(5)
         
-        # INFO O FAKTUŘE
-        pdf.set_font('Arial', 'B', 12); pdf.cell(100, 8, clean_text(f"Faktura c.: {cislo_f}"), 0, 1)
-        pdf.set_font('Arial', '', 10)
+        pdf.set_font('', 'B', 12); pdf.cell(100, 8, clean_text(f"Faktura c.: {cislo_f}"), 0, 1)
+        pdf.set_font('', '', 10)
+        
         pdf.cell(50, 6, "Vystaveno:", 0, 0); pdf.cell(50, 6, format_date(data['datum_vystaveni']), 0, 1)
         pdf.cell(50, 6, "Splatnost:", 0, 0); pdf.cell(50, 6, format_date(data['datum_splatnosti']), 0, 1)
         pdf.cell(50, 6, "Ucet:", 0, 0); pdf.cell(50, 6, clean_text(moje.get('ucet','')), 0, 1)
         pdf.cell(50, 6, "VS:", 0, 0); pdf.cell(50, 6, clean_text(data['variabilni_symbol']), 0, 1)
         
-        # POLOŽKY
         pdf.ln(15)
         pdf.set_fill_color(240)
-        pdf.set_font('Arial', 'B', 10)
+        pdf.set_font('', 'B')
         pdf.cell(140, 8, "POLOZKA", 1, 0, 'L', True); pdf.cell(50, 8, "CENA", 1, 1, 'R', True)
-        pdf.set_font('Arial', '', 10)
+        pdf.set_font('', '')
         
         for p in polozky:
             pdf.cell(140, 8, clean_text(p['nazev']), 1)
             pdf.cell(50, 8, f"{p['cena']:.2f} Kc", 1, 1, 'R')
             
         pdf.ln(5)
-        pdf.set_font('Arial', 'B', 14)
+        pdf.set_font('', 'B', 14)
         pdf.cell(190, 10, f"CELKEM: {data['castka_celkem']:.2f} Kc", 0, 1, 'R')
         
-        # QR KÓD
         if is_pro and moje.get('iban'):
             try:
-                import qrcode
                 qr_str = f"SPD*1.0*ACC:{moje['iban']}*AM:{data['castka_celkem']}*CC:CZK*MSG:{cislo_f}"
                 img = qrcode.make(qr_str)
-                img.save("tmp_qr.png")
-                pdf.image("tmp_qr.png", 10, pdf.get_y()-20, 30)
-                os.remove("tmp_qr.png")
-            except: pass # Pokud chybí knihovna nebo selže gen, ignorujeme
+                fn_qr = f"qr_{faktura_id}_{random.randint(1,999)}.png"
+                img.save(fn_qr)
+                pdf.image(fn_qr, 10, pdf.get_y()-20, 30)
+                os.remove(fn_qr)
+            except: pass
             
-        return pdf.output(dest='S').encode('latin-1', 'replace')
+        return pdf.output(dest='S').encode('latin-1', 'ignore')
     except Exception as e:
-        print(f"PDF FATAL: {e}")
+        print(f"PDF FATAL ERROR: {e}")
         return None
 
 # --- 7. SESSION ---
@@ -489,11 +489,10 @@ else:
                 else: st.warning("Vyberte data.")
 
         st.markdown("<br>", unsafe_allow_html=True)
-        # --- FILTR ---
         clients = ["Všichni"] + [c['jmeno'] for c in run_query("SELECT jmeno FROM klienti WHERE user_id=?", (uid,))]
-        sel_cli = st.selectbox("Klient", clients)
+        sel_cli = st.selectbox("Filtr", clients)
         
-        # UPRAVENO: Automaticky "Všechny roky" + načtení všech roků z DB
+        # --- OPRAVENÝ FILTR ROKŮ ---
         available_years_q = "SELECT DISTINCT strftime('%Y', datum_vystaveni) FROM faktury WHERE user_id=?"
         available_years_p = [uid]
         if sel_cli != "Všichni":
@@ -502,20 +501,16 @@ else:
         
         av_years = [y[0] for y in run_query(available_years_q, tuple(available_years_p))]
         year_opts = ["Všechny roky"] + sorted(av_years, reverse=True)
-        sel_year_filter = st.selectbox("Rok", year_opts) # Default je index 0 ("Všechny roky")
+        sel_year_filter = st.selectbox("Rok", year_opts)
 
-        # Malé statistiky
         if sel_cli != "Všichni":
             sc_k = run_query("SELECT SUM(f.castka_celkem) FROM faktury f JOIN klienti k ON f.klient_id=k.id WHERE f.user_id=? AND k.jmeno=?", (uid, sel_cli), True)[0] or 0
             su_k = run_query("SELECT SUM(f.castka_celkem) FROM faktury f JOIN klienti k ON f.klient_id=k.id WHERE f.user_id=? AND k.jmeno=? AND f.uhrazeno=0", (uid, sel_cli), True)[0] or 0
             st.markdown(f"<div class='stat-container'><div class='stat-box'><div class='stat-label'>{sel_cli} CELKEM</div><div class='stat-value text-gold'>{sc_k:,.0f} Kč</div></div><div class='stat-box'><div class='stat-label'>{sel_cli} DLUŽÍ</div><div class='stat-value text-red'>{su_k:,.0f} Kč</div></div></div>", unsafe_allow_html=True)
 
         q = "SELECT f.*, k.jmeno FROM faktury f JOIN klienti k ON f.klient_id=k.id WHERE f.user_id=?"; p = [uid]
-        if sel_cli != "Všichni":
-            q += " AND k.jmeno=?"; p.append(sel_cli)
-        if sel_year_filter != "Všechny roky":
-            q += " AND strftime('%Y', f.datum_vystaveni)=?"; p.append(sel_year_filter)
-        
+        if sel_cli != "Všichni": q += " AND k.jmeno=?"; p.append(sel_cli)
+        if sel_year_filter != "Všechny roky": q += " AND strftime('%Y', f.datum_vystaveni)=?"; p.append(sel_year_filter)
         q += " ORDER BY f.id DESC LIMIT 50"
         
         df_faktury = pd.read_sql(q, get_db(), params=p)
@@ -529,7 +524,7 @@ else:
                 else: 
                     if c1.button("Zaplaceno", key=f"u1_{row['id']}"): run_command("UPDATE faktury SET uhrazeno=1 WHERE id=?",(row['id'],)); st.rerun()
                 
-                # PDF GENERACE (S OPRAVOU CHYBY)
+                # PDF GENERACE (Nezničitelná verze)
                 pdf_bytes = generate_pdf(row['id'], uid, is_pro)
                 if pdf_bytes:
                     c2.download_button("PDF", pdf_bytes, f"{c_full}.pdf", "application/pdf", key=f"pd_{row['id']}")
