@@ -41,8 +41,8 @@ SYSTEM_EMAIL = {
     "display_name": "MojeFakturace"
 }
 
-DB_FILE = 'fakturace_v47_final.db'
-FONT_FILE = 'arial.ttf' # Musí být nahrán vedle skriptu
+DB_FILE = 'fakturace_v48_debug.db' # Nová DB pro jistotu
+FONT_FILE = 'arial.ttf' 
 
 # --- 1. DESIGN ---
 st.set_page_config(page_title="Fakturace Pro", page_icon="💎", layout="centered")
@@ -110,11 +110,8 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS faktura_polozky (id INTEGER PRIMARY KEY, faktura_id INTEGER, nazev TEXT, cena REAL)''')
     c.execute('''CREATE TABLE IF NOT EXISTS licencni_klice (id INTEGER PRIMARY KEY, kod TEXT UNIQUE, dny_platnosti INTEGER, vygenerovano TEXT, pouzito_uzivatelem_id INTEGER, poznamka TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS email_templates (id INTEGER PRIMARY KEY, name TEXT UNIQUE, subject TEXT, body TEXT)''')
-    
-    # --- UPRAVENO: ZMĚNA TEXTU UVÍTÁCÍHO EMAILU ---
     try: c.execute("INSERT OR IGNORE INTO email_templates (name, subject, body) VALUES ('welcome', 'Vítejte ve vašem fakturačním systému', 'Dobrý den {name},\n\nVáš účet byl úspěšně vytvořen.\n\nS pozdravem,\nTým MojeFakturace')")
     except: pass
-    
     try:
         adm_hash = hashlib.sha256(str.encode(admin_pass_init)).hexdigest()
         c.execute("INSERT OR IGNORE INTO users (username, password_hash, role, full_name, email, phone, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)", ("admin", adm_hash, "admin", "Super Admin", "admin@system.cz", "000000000", datetime.now().isoformat()))
@@ -162,8 +159,7 @@ def process_logo(uploaded_file):
     if not uploaded_file: return None
     try:
         img = Image.open(uploaded_file)
-        # Jednoduché zpracování loga bez rembg pro stabilitu
-        if img.mode != "RGBA": img = img.convert("RGBA")
+        if img.mode in ("RGBA", "P"): img = img.convert("RGB")
         b = io.BytesIO(); img.save(b, format='PNG'); return b.getvalue()
     except: return None
 
@@ -176,11 +172,11 @@ def send_email_custom(to, sub, body):
 
 def send_welcome_email_db(to, name):
     tpl = run_query("SELECT subject, body FROM email_templates WHERE name='welcome'", single=True)
-    # Default text pokud DB selže (pojistka)
-    s_def = "Vítejte ve vašem fakturačním systému"
-    b_def = f"Dobrý den {name},\n\nVáš účet byl úspěšně vytvořen."
+    # Default text
+    def_sub = "Vítejte ve vašem fakturačním systému"
+    def_body = f"Dobrý den {name},\n\nVáš účet byl úspěšně vytvořen.\n\nS pozdravem,\nTým MojeFakturace"
     
-    s, b = (tpl['subject'], tpl['body'].replace("{name}", name)) if tpl else (s_def, b_def)
+    s, b = (tpl['subject'], tpl['body'].replace("{name}", name)) if tpl else (def_sub, def_body)
     return send_email_custom(to, s, b)
 
 def get_export_data(user_id):
@@ -198,22 +194,18 @@ def get_export_data(user_id):
     finally: conn.close()
     return json.dumps(export_data, default=str)
 
-# --- PDF GENERACE (PŮVODNÍ FUNKČNÍ LOGIKA) ---
+# --- GENERACE PDF (DEBUG MODE) ---
 def generate_pdf(faktura_id, uid, is_pro):
-    # Kontrola existence fontu
     use_font = os.path.exists(FONT_FILE)
     
-    # Funkce pro ošetření textu
     def txt(text):
         if text is None: return ""
         text = str(text)
-        # Pokud máme font, vrátíme unicode, jinak odstraníme diakritiku
         if use_font: return text
         return remove_accents(text)
 
     class PDF(FPDF):
         def header(self):
-            # Pokud máme font, přidáme ho
             if use_font:
                 try:
                     self.add_font('ArialCS', '', FONT_FILE, uni=True)
@@ -238,14 +230,13 @@ def generate_pdf(faktura_id, uid, is_pro):
         pdf = PDF()
         pdf.add_page()
         
-        # Font pro tělo
         if use_font: pdf.set_font('ArialCS', '', 10)
         else: pdf.set_font('Arial', '', 10)
 
         # Logo
         if data['logo_blob']:
             try:
-                fn = f"l_{faktura_id}.png"
+                fn = f"l_{faktura_id}_{random.randint(100,999)}.png"
                 with open(fn, "wb") as f: f.write(data['logo_blob'])
                 pdf.image(fn, 10, 10, 30)
                 os.remove(fn)
@@ -261,7 +252,6 @@ def generate_pdf(faktura_id, uid, is_pro):
         pdf.cell(95, 5, "DODAVATEL:", 0, 0); pdf.cell(95, 5, "ODBĚRATEL:", 0, 1); pdf.set_text_color(0)
         y = pdf.get_y()
         
-        # Dodavatel
         if use_font: pdf.set_font('ArialCS', 'B', 11)
         else: pdf.set_font('Arial', 'B', 11)
         pdf.cell(95, 5, txt(moje.get('nazev','')), 0, 1)
@@ -270,7 +260,6 @@ def generate_pdf(faktura_id, uid, is_pro):
         else: pdf.set_font('Arial', '', 10)
         pdf.multi_cell(95, 5, txt(f"{moje.get('adresa','')}\nIC: {moje.get('ico','')}\nDIC: {moje.get('dic','')}\n{moje.get('email','')}"))
         
-        # Odběratel
         pdf.set_xy(105, y)
         if use_font: pdf.set_font('ArialCS', 'B', 11)
         else: pdf.set_font('Arial', 'B', 11)
@@ -310,20 +299,32 @@ def generate_pdf(faktura_id, uid, is_pro):
         else: pdf.set_font('Arial', 'B', 14)
         pdf.cell(190, 10, f"CELKEM: {data['castka_celkem']:.2f} Kc", 0, 1, 'R')
         
+        # --- QR KÓD (IZOLOVANÝ) ---
+        # Pokud selže QR kód, faktura se vygeneruje bez něj, ale nespadne
         if is_pro and moje.get('iban'):
             try:
-                # Pro QR kód se používá jen ASCII, takže neřešíme font
-                ic = moje['iban'].replace(" ", "").upper()
-                qr = f"SPD*1.0*ACC:{ic}*AM:{data['castka_celkem']}*CC:CZK*MSG:{cislo_f}"
-                q = qrcode.make(qr); fn_q = f"q_{faktura_id}.png"; q.save(fn_q)
-                pdf.image(fn_q, 10, pdf.get_y()-20, 30); os.remove(fn_q)
-            except: pass
+                iban_clean = str(moje['iban']).replace(" ", "").upper()
+                if iban_clean:
+                    # Konstrukce SPAYD řetězce
+                    qr_str = f"SPD*1.0*ACC:{iban_clean}*AM:{data['castka_celkem']}*CC:CZK*MSG:{cislo_f}"
+                    # Generování obrázku
+                    qr_img = qrcode.make(qr_str)
+                    fn_qr = f"qr_{faktura_id}_{random.randint(100,999)}.png"
+                    qr_img.save(fn_qr)
+                    # Vložení do PDF
+                    pdf.image(fn_qr, 10, pdf.get_y()-20, 30)
+                    # Úklid
+                    os.remove(fn_qr)
+            except Exception as e:
+                # Tady chybu ignorujeme (jen ji vypíšeme do konzole serveru), aby uživatel dostal aspoň PDF bez QR
+                print(f"QR Error: {e}")
+                pass
             
-        # ZDE JE TEN ZÁSADNÍ KROK PRO STABILITY
         return pdf.output(dest='S').encode('latin-1')
+        
     except Exception as e:
-        print(f"PDF ERROR: {e}")
-        return None
+        # Vracíme text chyby, aby se zobrazila v UI
+        return f"ERROR: {str(e)}"
 
 # --- 7. SESSION ---
 if 'user_id' not in st.session_state: st.session_state.user_id = None
@@ -504,9 +505,15 @@ else:
                 else: 
                     if c1.button("Zaplaceno", key=f"u1_{row['id']}"): run_command("UPDATE faktury SET uhrazeno=1 WHERE id=?",(row['id'],)); st.rerun()
                 
-                pdf = generate_pdf(row['id'], uid, is_pro)
-                if pdf: c2.download_button("PDF", pdf, f"{cf}.pdf", "application/pdf", key=f"pd_{row['id']}")
-                else: c2.error("Chyba PDF")
+                pdf_output = generate_pdf(row['id'], uid, is_pro)
+                
+                # Zpracování výstupu (PDF nebo Chybová hláška)
+                if isinstance(pdf_output, bytes):
+                    c2.download_button("PDF", pdf_output, f"{cf}.pdf", "application/pdf", key=f"pd_{row['id']}")
+                else:
+                    # Pokud se vrátí text (chyba), zobrazíme ji červeně
+                    if pdf_output: st.error(pdf_output)
+                    else: st.error("Chyba PDF")
                 
                 f_edit_key = f"edit_f_{row['id']}"
                 if f_edit_key not in st.session_state: st.session_state[f_edit_key] = False
