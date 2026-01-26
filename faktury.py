@@ -41,8 +41,8 @@ SYSTEM_EMAIL = {
     "display_name": "MojeFakturace"
 }
 
-DB_FILE = 'fakturace_v41_pro.db'
-FONT_FILE = 'arial.ttf' # Očekáváme soubor lokálně
+DB_FILE = 'fakturace_v42_final.db'
+FONT_FILE = 'arial.ttf' 
 
 # --- 1. DESIGN ---
 st.set_page_config(page_title="Fakturace Pro", page_icon="💎", layout="centered")
@@ -190,22 +190,21 @@ def get_export_data(user_id):
     finally: conn.close()
     return json.dumps(export_data, default=str)
 
-# --- GENERACE PDF (OLD SCHOOL STYLE) ---
+# --- GENERACE PDF (PŮVODNÍ FUNKČNÍ LOGIKA) ---
 def generate_pdf(faktura_id, uid, is_pro):
-    # Zjistíme, jestli máme font
-    use_custom_font = os.path.exists(FONT_FILE)
+    # Zkontrolujeme, zda existuje font
+    use_font = os.path.exists(FONT_FILE)
     
-    # Funkce pro text (pokud font nemáme, odstraníme diakritiku)
-    def txt(text):
+    # Funkce pro bezpečný text (pokud není font, odstraní háčky)
+    def clean(text):
         if not text: return ""
         text = str(text)
-        if use_custom_font: return text
+        if use_font: return text
         return remove_accents(text)
 
     class PDF(FPDF):
         def header(self):
-            # Nastavení fontu v hlavičce
-            if use_custom_font:
+            if use_font:
                 try:
                     self.add_font('ArialCS', '', FONT_FILE, uni=True)
                     self.add_font('ArialCS', 'B', FONT_FILE, uni=True)
@@ -229,90 +228,92 @@ def generate_pdf(faktura_id, uid, is_pro):
         pdf = PDF()
         pdf.add_page()
         
-        # Nastavení fontu pro tělo
-        if use_custom_font:
-            pdf.set_font('ArialCS', '', 10)
-        else:
-            pdf.set_font('Arial', '', 10)
+        if use_font: pdf.set_font('ArialCS', '', 10)
+        else: pdf.set_font('Arial', '', 10)
 
         # Logo
         if data['logo_blob']:
             try:
-                fn = f"l_{faktura_id}.png"
+                fn = f"tmp_l_{faktura_id}.png"
                 with open(fn, "wb") as f: f.write(data['logo_blob'])
                 pdf.image(fn, 10, 10, 30)
                 os.remove(fn)
             except: pass 
 
-        # Barvy
+        cislo_f = data['cislo_full'] if data['cislo_full'] else f"{data['prefix']}{data['cislo']}"
         r, g, b = 0, 0, 0
         if is_pro and data['barva']:
             try: c = data['barva'].lstrip('#'); r, g, b = tuple(int(c[i:i+2], 16) for i in (0, 2, 4))
             except: pass
 
-        cislo_f = data['cislo_full'] if data['cislo_full'] else f"{data['prefix']}{data['cislo']}"
-
         pdf.set_text_color(100); pdf.set_y(40)
-        pdf.cell(95, 5, "DODAVATEL:", 0, 0); pdf.cell(95, 5, "ODBĚRATEL:", 0, 1); pdf.set_text_color(0)
+        pdf.cell(95, 5, "DODAVATEL:", 0, 0); pdf.cell(95, 5, "ODBĚRATEL:", 0, 1)
+        pdf.set_text_color(0)
+        
         y = pdf.get_y()
-        
         # Dodavatel
-        if use_custom_font: pdf.set_font('ArialCS', 'B', 11)
+        if use_font: pdf.set_font('ArialCS', 'B', 11)
         else: pdf.set_font('Arial', 'B', 11)
-        pdf.cell(95, 5, txt(moje.get('nazev','')), 0, 1)
-        
-        if use_custom_font: pdf.set_font('ArialCS', '', 10)
+        pdf.cell(95, 5, clean(moje.get('nazev','')), 0, 1)
+        if use_font: pdf.set_font('ArialCS', '', 10)
         else: pdf.set_font('Arial', '', 10)
-        pdf.multi_cell(95, 5, txt(f"{moje.get('adresa','')}\nIC: {moje.get('ico','')}\nDIC: {moje.get('dic','')}\n{moje.get('email','')}"))
+        pdf.multi_cell(95, 5, clean(f"{moje.get('adresa','')}\nIC: {moje.get('ico','')}\nDIC: {moje.get('dic','')}\n{moje.get('email','')}"))
         
         # Odběratel
         pdf.set_xy(105, y)
-        if use_custom_font: pdf.set_font('ArialCS', 'B', 11)
+        if use_font: pdf.set_font('ArialCS', 'B', 11)
         else: pdf.set_font('Arial', 'B', 11)
-        pdf.cell(95, 5, txt(data['k_jmeno']), 0, 1)
-        
+        pdf.cell(95, 5, clean(data['k_jmeno']), 0, 1)
         pdf.set_xy(105, pdf.get_y())
-        if use_custom_font: pdf.set_font('ArialCS', '', 10)
+        if use_font: pdf.set_font('ArialCS', '', 10)
         else: pdf.set_font('Arial', '', 10)
-        pdf.multi_cell(95, 5, txt(f"{data['k_adresa']}\nIC: {data['k_ico']}\nDIC: {data['k_dic']}"))
+        pdf.multi_cell(95, 5, clean(f"{data['k_adresa']}\nIC: {data['k_ico']}\nDIC: {data['k_dic']}"))
         
         pdf.ln(10)
         pdf.set_fill_color(r, g, b); pdf.rect(10, pdf.get_y(), 190, 2, 'F'); pdf.ln(5)
         
-        if use_custom_font: pdf.set_font('ArialCS', 'B', 12)
-        else: pdf.set_font('Arial', 'B', 12)
-        pdf.cell(100, 8, txt(f"Faktura c.: {cislo_f}"), 0, 1)
+        if use_font: pdf.set_font('ArialCS', 'B', 14)
+        else: pdf.set_font('Arial', 'B', 14)
+        pdf.cell(100, 8, clean(f"Faktura c.: {cislo_f}"), 0, 1)
         
-        if use_custom_font: pdf.set_font('ArialCS', '', 10)
+        if use_font: pdf.set_font('ArialCS', '', 10)
         else: pdf.set_font('Arial', '', 10)
         pdf.cell(50, 6, "Vystaveno:", 0, 0); pdf.cell(50, 6, format_date(data['datum_vystaveni']), 0, 1)
         pdf.cell(50, 6, "Splatnost:", 0, 0); pdf.cell(50, 6, format_date(data['datum_splatnosti']), 0, 1)
-        pdf.cell(50, 6, "Ucet:", 0, 0); pdf.cell(50, 6, txt(moje.get('ucet','')), 0, 1)
-        pdf.cell(50, 6, "VS:", 0, 0); pdf.cell(50, 6, txt(data['variabilni_symbol']), 0, 1)
+        pdf.cell(50, 6, "Ucet:", 0, 0); pdf.cell(50, 6, clean(moje.get('ucet','')), 0, 1)
+        pdf.cell(50, 6, "VS:", 0, 0); pdf.cell(50, 6, clean(data['variabilni_symbol']), 0, 1)
         
         pdf.ln(15)
         pdf.set_fill_color(240)
+        if use_font: pdf.set_font('ArialCS', 'B', 10)
+        else: pdf.set_font('Arial', 'B', 10)
         pdf.cell(140, 8, "POLOZKA", 1, 0, 'L', True); pdf.cell(50, 8, "CENA", 1, 1, 'R', True)
         
+        if use_font: pdf.set_font('ArialCS', '', 10)
+        else: pdf.set_font('Arial', '', 10)
+        
         for p in polozky:
-            pdf.cell(140, 8, txt(p['nazev']), 1); pdf.cell(50, 8, f"{p['cena']:.2f} Kc", 1, 1, 'R')
+            pdf.cell(140, 8, clean(p['nazev']), 1)
+            pdf.cell(50, 8, f"{p['cena']:.2f} Kc", 1, 1, 'R')
             
         pdf.ln(5)
-        if use_custom_font: pdf.set_font('ArialCS', 'B', 14)
+        if use_font: pdf.set_font('ArialCS', 'B', 14)
         else: pdf.set_font('Arial', 'B', 14)
         pdf.cell(190, 10, f"CELKEM: {data['castka_celkem']:.2f} Kc", 0, 1, 'R')
         
         if is_pro and moje.get('iban'):
             try:
-                qr = f"SPD*1.0*ACC:{moje['iban']}*AM:{data['castka_celkem']}*CC:CZK*MSG:{cislo_f}"
-                q = qrcode.make(qr); fn_q = f"q_{faktura_id}.png"; q.save(fn_q)
-                pdf.image(fn_q, 10, pdf.get_y()-20, 30); os.remove(fn_q)
+                qr_str = f"SPD*1.0*ACC:{moje['iban']}*AM:{data['castka_celkem']}*CC:CZK*MSG:{cislo_f}"
+                img = qrcode.make(qr_str)
+                fn_qr = f"qr_{faktura_id}.png"
+                img.save(fn_qr)
+                pdf.image(fn_qr, 10, pdf.get_y()-20, 30)
+                os.remove(fn_qr)
             except: pass
             
-        # DŮLEŽITÉ: encode('latin-1') pro binární string, který Streamlit potřebuje pro stažení
         return pdf.output(dest='S').encode('latin-1')
     except Exception as e:
-        print(f"Chyba PDF: {e}")
+        print(f"PDF ERROR: {e}")
         return None
 
 # --- 7. SESSION ---
@@ -446,8 +447,15 @@ else:
                     _, full, _ = get_next_invoice_number(cid, uid); st.info(f"Doklad: {full}")
                     d1,d2 = st.columns(2); dv = d1.date_input("Vystavení", date.today(), key=f"d1_{rid}"); ds = d2.date_input("Splatnost", date.today()+timedelta(14), key=f"d2_{rid}")
                     ed = st.data_editor(st.session_state.items_df, num_rows="dynamic", use_container_width=True, key=f"e_{rid}")
+                    
+                    # --- OPRAVENO: SOUČET POLOŽEK ---
+                    total_sum = 0.0
+                    if not ed.empty and "Cena" in ed.columns:
+                        total_sum = float(pd.to_numeric(ed["Cena"], errors='coerce').fillna(0).sum())
+                    st.markdown(f"**💰 Celkem k úhradě: {total_sum:,.2f} Kč**")
+                    
                     if st.button("Vystavit", type="primary", key=f"b_{rid}"):
-                        fid = run_command("INSERT INTO faktury (user_id, cislo_full, klient_id, kategorie_id, datum_vystaveni, datum_splatnosti, castka_celkem, variabilni_symbol) VALUES (?,?,?,?,?,?,?,?)", (uid, full, kid, cid, dv, ds, float(pd.to_numeric(ed["Cena"], errors='coerce').fillna(0).sum()), re.sub(r"\D", "", full)))
+                        fid = run_command("INSERT INTO faktury (user_id, cislo_full, klient_id, kategorie_id, datum_vystaveni, datum_splatnosti, castka_celkem, variabilni_symbol) VALUES (?,?,?,?,?,?,?,?)", (uid, full, kid, cid, dv, ds, total_sum, re.sub(r"\D", "", full)))
                         for _, r in ed.iterrows(): 
                             if r.get("Popis položky"): run_command("INSERT INTO faktura_polozky (faktura_id, nazev, cena) VALUES (?,?,?)", (fid, r["Popis položky"], float(r.get("Cena", 0))))
                         run_command("UPDATE kategorie SET aktualni_cislo = aktualni_cislo + 1 WHERE id = ?", (cid,)); reset_forms(); st.success("OK"); st.rerun()
