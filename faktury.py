@@ -13,6 +13,7 @@ import pandas as pd
 import random
 import string
 import time
+import urllib.request # Pro stažení fontu
 from datetime import datetime, date, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -40,7 +41,9 @@ SYSTEM_EMAIL = {
     "display_name": "MojeFakturace"
 }
 
-DB_FILE = 'fakturace_v35_pro.db'
+DB_FILE = 'fakturace_v36_pro.db'
+FONT_URL = "https://github.com/reingart/pyfpdf/raw/master/font/DejaVuSans.ttf"
+FONT_FILE = "DejaVuSans.ttf"
 
 # --- 1. DESIGN (MOBILE FIRST) ---
 st.set_page_config(page_title="Fakturace Pro", page_icon="💎", layout="centered")
@@ -201,21 +204,28 @@ def send_welcome_email_db(to_email, full_name):
         return send_email_custom(to_email, subj, body)
     except: return False
 
-# --- GENERATOR PDF (ROBUSTNÍ VERZE 3.5) ---
+# --- PDF GENERATOR S DIAKRITIKOU ---
 def generate_pdf(faktura_id, uid, is_pro):
     import qrcode
     
-    # Funkce pro bezpečné odstranění diakritiky (aby PDF nespadlo)
-    def clean_text(text):
-        if not text: return ""
-        text = str(text)
-        # Normalizace a odstranění non-ascii znaků
-        return unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('ascii')
+    # 1. Stažení fontu, pokud chybí
+    if not os.path.exists(FONT_FILE):
+        try:
+            print("Stahuji font s podporou češtiny...")
+            urllib.request.urlretrieve(FONT_URL, FONT_FILE)
+        except Exception as e:
+            print(f"Chyba stahování fontu: {e}")
+            return None # Bez fontu to nepůjde
 
     class PDF(FPDF):
         def header(self):
-            # Standardní font Arial/Helvetica (bezpečný)
-            self.set_font('Arial', 'B', 24)
+            # Nastavení českého fontu
+            try:
+                self.add_font('DejaVu', '', FONT_FILE, uni=True)
+                self.set_font('DejaVu', '', 24)
+            except:
+                self.set_font('Arial', 'B', 24)
+            
             self.set_text_color(50, 50, 50)
             self.cell(0, 10, 'FAKTURA', 0, 1, 'R')
             self.ln(5)
@@ -230,7 +240,13 @@ def generate_pdf(faktura_id, uid, is_pro):
         
         pdf = PDF()
         pdf.add_page()
-        pdf.set_font('Arial', '', 10)
+        
+        # Nastavení českého fontu pro tělo
+        try:
+            pdf.add_font('DejaVu', '', FONT_FILE, uni=True)
+            pdf.set_font('DejaVu', '', 10)
+        except:
+            pdf.set_font('Arial', '', 10)
 
         # Logo
         if data['logo_blob']:
@@ -252,46 +268,42 @@ def generate_pdf(faktura_id, uid, is_pro):
         cislo_f = data['cislo_full'] if data['cislo_full'] else f"{data['prefix']}{data['cislo']}"
 
         pdf.set_text_color(100); pdf.set_y(40)
-        pdf.cell(95, 5, "DODAVATEL:", 0, 0); pdf.cell(95, 5, "ODBERATEL:", 0, 1)
+        pdf.cell(95, 5, "DODAVATEL:", 0, 0); pdf.cell(95, 5, "ODBĚRATEL:", 0, 1)
         pdf.set_text_color(0)
         
         y = pdf.get_y()
         # Dodavatel
-        pdf.set_font('Arial', 'B', 11); pdf.cell(95, 5, clean_text(moje.get('nazev','')), 0, 1)
-        pdf.set_font('Arial', '', 10)
-        pdf.multi_cell(95, 5, clean_text(f"{moje.get('adresa','')}\nIC: {moje.get('ico','')}\nDIC: {moje.get('dic','')}\n{moje.get('email','')}"))
+        pdf.set_font_size(12); pdf.cell(95, 5, str(moje.get('nazev','')), 0, 1)
+        pdf.set_font_size(10); pdf.multi_cell(95, 5, f"{moje.get('adresa','')}\nIČ: {moje.get('ico','')}\nDIČ: {moje.get('dic','')}\n{moje.get('email','')}")
         
         # Odběratel
         pdf.set_xy(105, y)
-        pdf.set_font('Arial', 'B', 11); pdf.cell(95, 5, clean_text(data['k_jmeno']), 0, 1)
+        pdf.set_font_size(12); pdf.cell(95, 5, str(data['k_jmeno']), 0, 1)
         pdf.set_xy(105, pdf.get_y())
-        pdf.set_font('Arial', '', 10)
-        pdf.multi_cell(95, 5, clean_text(f"{data['k_adresa']}\nIC: {data['k_ico']}\nDIC: {data['k_dic']}"))
+        pdf.set_font_size(10); pdf.multi_cell(95, 5, f"{data['k_adresa']}\nIČ: {data['k_ico']}\nDIČ: {data['k_dic']}")
         
         pdf.ln(10)
         pdf.set_fill_color(r, g, b); pdf.rect(10, pdf.get_y(), 190, 2, 'F'); pdf.ln(5)
         
-        pdf.set_font('', 'B', 12); pdf.cell(100, 8, clean_text(f"Faktura c.: {cislo_f}"), 0, 1)
-        pdf.set_font('', '', 10)
+        pdf.set_font_size(14); pdf.cell(100, 8, f"Faktura č.: {cislo_f}", 0, 1)
+        pdf.set_font_size(10)
         
         pdf.cell(50, 6, "Vystaveno:", 0, 0); pdf.cell(50, 6, format_date(data['datum_vystaveni']), 0, 1)
         pdf.cell(50, 6, "Splatnost:", 0, 0); pdf.cell(50, 6, format_date(data['datum_splatnosti']), 0, 1)
-        pdf.cell(50, 6, "Ucet:", 0, 0); pdf.cell(50, 6, clean_text(moje.get('ucet','')), 0, 1)
-        pdf.cell(50, 6, "VS:", 0, 0); pdf.cell(50, 6, clean_text(data['variabilni_symbol']), 0, 1)
+        pdf.cell(50, 6, "Účet:", 0, 0); pdf.cell(50, 6, str(moje.get('ucet','')), 0, 1)
+        pdf.cell(50, 6, "VS:", 0, 0); pdf.cell(50, 6, str(data['variabilni_symbol']), 0, 1)
         
         pdf.ln(15)
         pdf.set_fill_color(240)
-        pdf.set_font('', 'B')
-        pdf.cell(140, 8, "POLOZKA", 1, 0, 'L', True); pdf.cell(50, 8, "CENA", 1, 1, 'R', True)
-        pdf.set_font('', '')
+        pdf.cell(140, 8, "POLOŽKA", 1, 0, 'L', True); pdf.cell(50, 8, "CENA", 1, 1, 'R', True)
         
         for p in polozky:
-            pdf.cell(140, 8, clean_text(p['nazev']), 1)
-            pdf.cell(50, 8, f"{p['cena']:.2f} Kc", 1, 1, 'R')
+            pdf.cell(140, 8, str(p['nazev']), 1)
+            pdf.cell(50, 8, f"{p['cena']:.2f} Kč", 1, 1, 'R')
             
         pdf.ln(5)
-        pdf.set_font('', 'B', 14)
-        pdf.cell(190, 10, f"CELKEM: {data['castka_celkem']:.2f} Kc", 0, 1, 'R')
+        pdf.set_font_size(14)
+        pdf.cell(190, 10, f"CELKEM: {data['castka_celkem']:.2f} Kč", 0, 1, 'R')
         
         if is_pro and moje.get('iban'):
             try:
@@ -303,7 +315,7 @@ def generate_pdf(faktura_id, uid, is_pro):
                 os.remove(fn_qr)
             except: pass
             
-        return pdf.output(dest='S').encode('latin-1', 'ignore')
+        return pdf.output(dest='S').encode('latin-1') 
     except Exception as e:
         print(f"PDF FATAL ERROR: {e}")
         return None
@@ -492,7 +504,6 @@ else:
         clients = ["Všichni"] + [c['jmeno'] for c in run_query("SELECT jmeno FROM klienti WHERE user_id=?", (uid,))]
         sel_cli = st.selectbox("Filtr", clients)
         
-        # --- OPRAVENÝ FILTR ROKŮ ---
         available_years_q = "SELECT DISTINCT strftime('%Y', datum_vystaveni) FROM faktury WHERE user_id=?"
         available_years_p = [uid]
         if sel_cli != "Všichni":
@@ -523,13 +534,8 @@ else:
                     if c1.button("Zrušit úhradu", key=f"u0_{row['id']}"): run_command("UPDATE faktury SET uhrazeno=0 WHERE id=?",(row['id'],)); st.rerun()
                 else: 
                     if c1.button("Zaplaceno", key=f"u1_{row['id']}"): run_command("UPDATE faktury SET uhrazeno=1 WHERE id=?",(row['id'],)); st.rerun()
-                
-                # PDF GENERACE (Nezničitelná verze)
-                pdf_bytes = generate_pdf(row['id'], uid, is_pro)
-                if pdf_bytes:
-                    c2.download_button("PDF", pdf_bytes, f"{c_full}.pdf", "application/pdf", key=f"pd_{row['id']}")
-                else:
-                    c2.error("Chyba PDF")
+                pdf = generate_pdf(row['id'], uid, is_pro)
+                if isinstance(pdf, bytes): c2.download_button("PDF", pdf, f"{c_full}.pdf", "application/pdf", key=f"pd_{row['id']}")
                 
                 f_edit_key = f"edit_f_{row['id']}"
                 if f_edit_key not in st.session_state: st.session_state[f_edit_key] = False
