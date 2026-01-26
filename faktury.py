@@ -122,7 +122,7 @@ def init_db():
     
     try:
         adm_hash = hashlib.sha256(str.encode(admin_pass_init)).hexdigest()
-        c.execute("INSERT OR IGNORE INTO users (username, password_hash, role, full_name, email, phone, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)", ("admin", adm_hash, "admin", "Super Admin", "admin@system.cz", "000000000", datetime.now().isoformat()))
+        c.execute("INSERT OR IGNORE INTO users (username, password_hash, role, full_name, email, phone, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)", ("ADMIN_INIT_PASS", adm_hash, "ADMIN_INIT_PASS", "Super Admin", "jsem@michalkochtik.cz", "000000000", datetime.now().isoformat()))
     except: pass
     conn.commit(); conn.close()
 
