@@ -41,7 +41,7 @@ SYSTEM_EMAIL = {
     "display_name": "MojeFakturace"
 }
 
-DB_FILE = 'fakturace_v48_fixed.db' # Databáze zůstává stejná
+DB_FILE = 'fakturace_v49_logo.db'
 FONT_FILE = 'arial.ttf' 
 
 # --- 1. DESIGN ---
@@ -196,7 +196,7 @@ def get_export_data(user_id):
     finally: conn.close()
     return json.dumps(export_data, default=str)
 
-# --- PDF GENERACE (OPRAVENÁ POZICE QR) ---
+# --- PDF GENERACE (S VĚTŠÍM LOGEM) ---
 def generate_pdf(faktura_id, uid, is_pro):
     use_font = os.path.exists(FONT_FILE)
     
@@ -239,12 +239,12 @@ def generate_pdf(faktura_id, uid, is_pro):
         if use_font: pdf.set_font('ArialCS', '', 10)
         else: pdf.set_font('Arial', '', 10)
 
-        # Logo
+        # Logo - ZVĚTŠENO NA 50mm
         if data.get('logo_blob'):
             try:
                 fn = f"l_{faktura_id}.png"
                 with open(fn, "wb") as f: f.write(data['logo_blob'])
-                pdf.image(fn, 10, 10, 30)
+                pdf.image(fn, 10, 10, 50) # Zvětšeno na 50
                 os.remove(fn)
             except: pass 
 
@@ -254,7 +254,9 @@ def generate_pdf(faktura_id, uid, is_pro):
             try: c = data['barva'].lstrip('#'); r, g, b = tuple(int(c[i:i+2], 16) for i in (0, 2, 4))
             except: pass
 
-        pdf.set_text_color(100); pdf.set_y(40)
+        pdf.set_text_color(100)
+        # POSUNUTO NÍŽE NA Y=55 (původně 40), aby se vešlo logo
+        pdf.set_y(55) 
         pdf.cell(95, 5, "DODAVATEL:", 0, 0); pdf.cell(95, 5, "ODBĚRATEL:", 0, 1); pdf.set_text_color(0)
         y = pdf.get_y()
         
@@ -313,11 +315,7 @@ def generate_pdf(faktura_id, uid, is_pro):
                 ic = str(moje['iban']).replace(" ", "").upper()
                 qr = f"SPD*1.0*ACC:{ic}*AM:{data.get('castka_celkem')}*CC:CZK*MSG:{cislo_f}"
                 q = qrcode.make(qr); fn_q = f"q_{faktura_id}.png"; q.save(fn_q)
-                
-                # ZMĚNA POZICE:
-                # pdf.get_y() vrací spodní hranu posledního textu (CELKEM).
-                # Přidáme 2 jednotky, aby QR kód začal až pod textem.
-                pdf.image(fn_q, 10, pdf.get_y() + 2, 30)
+                pdf.image(fn_q, 10, pdf.get_y()+2, 30) # Posunuto pod text
                 os.remove(fn_q)
             except: pass
             
