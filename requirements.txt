@@ -4,4 +4,5 @@ requests
 fpdf
 qrcode
 Pillow
-rembg
+
+
