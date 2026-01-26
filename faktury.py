@@ -41,8 +41,8 @@ SYSTEM_EMAIL = {
     "display_name": "MojeFakturace"
 }
 
-DB_FILE = 'fakturace_v46_clean.db'
-FONT_FILE = 'arial.ttf' 
+DB_FILE = 'fakturace_v47_final.db'
+FONT_FILE = 'arial.ttf' # Musí být nahrán vedle skriptu
 
 # --- 1. DESIGN ---
 st.set_page_config(page_title="Fakturace Pro", page_icon="💎", layout="centered")
@@ -80,7 +80,7 @@ st.markdown("""
 
 # --- 2. DATABÁZE ---
 def get_db():
-    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+    conn = sqlite3.connect(DB_FILE, timeout=10)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -110,8 +110,11 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS faktura_polozky (id INTEGER PRIMARY KEY, faktura_id INTEGER, nazev TEXT, cena REAL)''')
     c.execute('''CREATE TABLE IF NOT EXISTS licencni_klice (id INTEGER PRIMARY KEY, kod TEXT UNIQUE, dny_platnosti INTEGER, vygenerovano TEXT, pouzito_uzivatelem_id INTEGER, poznamka TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS email_templates (id INTEGER PRIMARY KEY, name TEXT UNIQUE, subject TEXT, body TEXT)''')
-    try: c.execute("INSERT OR IGNORE INTO email_templates (name, subject, body) VALUES ('welcome', 'Vítejte v Fakturace Pro', 'Dobrý den {name},\n\nVáš účet byl úspěšně vytvořen.')")
+    
+    # --- UPRAVENO: ZMĚNA TEXTU UVÍTÁCÍHO EMAILU ---
+    try: c.execute("INSERT OR IGNORE INTO email_templates (name, subject, body) VALUES ('welcome', 'Vítejte ve vašem fakturačním systému', 'Dobrý den {name},\n\nVáš účet byl úspěšně vytvořen.\n\nS pozdravem,\nTým MojeFakturace')")
     except: pass
+    
     try:
         adm_hash = hashlib.sha256(str.encode(admin_pass_init)).hexdigest()
         c.execute("INSERT OR IGNORE INTO users (username, password_hash, role, full_name, email, phone, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)", ("admin", adm_hash, "admin", "Super Admin", "admin@system.cz", "000000000", datetime.now().isoformat()))
@@ -159,6 +162,7 @@ def process_logo(uploaded_file):
     if not uploaded_file: return None
     try:
         img = Image.open(uploaded_file)
+        # Jednoduché zpracování loga bez rembg pro stabilitu
         if img.mode != "RGBA": img = img.convert("RGBA")
         b = io.BytesIO(); img.save(b, format='PNG'); return b.getvalue()
     except: return None
@@ -172,7 +176,11 @@ def send_email_custom(to, sub, body):
 
 def send_welcome_email_db(to, name):
     tpl = run_query("SELECT subject, body FROM email_templates WHERE name='welcome'", single=True)
-    s, b = (tpl['subject'], tpl['body'].replace("{name}", name)) if tpl else ("Vítejte", f"Dobrý den {name},\n\nVáš účet byl vytvořen.")
+    # Default text pokud DB selže (pojistka)
+    s_def = "Vítejte ve vašem fakturačním systému"
+    b_def = f"Dobrý den {name},\n\nVáš účet byl úspěšně vytvořen."
+    
+    s, b = (tpl['subject'], tpl['body'].replace("{name}", name)) if tpl else (s_def, b_def)
     return send_email_custom(to, s, b)
 
 def get_export_data(user_id):
@@ -192,10 +200,21 @@ def get_export_data(user_id):
 
 # --- PDF GENERACE (PŮVODNÍ FUNKČNÍ LOGIKA) ---
 def generate_pdf(faktura_id, uid, is_pro):
+    # Kontrola existence fontu
+    use_font = os.path.exists(FONT_FILE)
+    
+    # Funkce pro ošetření textu
+    def txt(text):
+        if text is None: return ""
+        text = str(text)
+        # Pokud máme font, vrátíme unicode, jinak odstraníme diakritiku
+        if use_font: return text
+        return remove_accents(text)
+
     class PDF(FPDF):
         def header(self):
-            # Pokusíme se načíst font arial.ttf
-            if os.path.exists(FONT_FILE):
+            # Pokud máme font, přidáme ho
+            if use_font:
                 try:
                     self.add_font('ArialCS', '', FONT_FILE, uni=True)
                     self.add_font('ArialCS', 'B', FONT_FILE, uni=True)
@@ -212,21 +231,24 @@ def generate_pdf(faktura_id, uid, is_pro):
     try:
         data = run_query("SELECT f.*, k.jmeno as k_jmeno, k.adresa as k_adresa, k.ico as k_ico, k.dic as k_dic, kat.barva, kat.logo_blob, kat.prefix FROM faktury f JOIN klienti k ON f.klient_id=k.id JOIN kategorie kat ON f.kategorie_id=kat.id WHERE f.id=? AND f.user_id=?", (faktura_id, uid), single=True)
         if not data: return None
+        
         polozky = run_query("SELECT * FROM faktura_polozky WHERE faktura_id=?", (faktura_id,))
         moje = run_query("SELECT * FROM nastaveni WHERE user_id=? LIMIT 1", (uid,), single=True) or {}
         
-        pdf = PDF(); pdf.add_page()
+        pdf = PDF()
+        pdf.add_page()
         
         # Font pro tělo
-        if os.path.exists(FONT_FILE):
-            pdf.set_font('ArialCS', '', 10)
-        else:
-            pdf.set_font('Arial', '', 10)
+        if use_font: pdf.set_font('ArialCS', '', 10)
+        else: pdf.set_font('Arial', '', 10)
 
         # Logo
         if data['logo_blob']:
             try:
-                fn = f"l_{faktura_id}.png"; open(fn, "wb").write(data['logo_blob']); pdf.image(fn, 10, 10, 30); os.remove(fn)
+                fn = f"l_{faktura_id}.png"
+                with open(fn, "wb") as f: f.write(data['logo_blob'])
+                pdf.image(fn, 10, 10, 30)
+                os.remove(fn)
             except: pass 
 
         cislo_f = data['cislo_full'] if data['cislo_full'] else f"{data['prefix']}{data['cislo']}"
@@ -239,72 +261,69 @@ def generate_pdf(faktura_id, uid, is_pro):
         pdf.cell(95, 5, "DODAVATEL:", 0, 0); pdf.cell(95, 5, "ODBĚRATEL:", 0, 1); pdf.set_text_color(0)
         y = pdf.get_y()
         
-        # Funkce pro výpis textu (pokud není font, odstraní háčky)
-        def wtxt(t): 
-            if not t: return ""
-            t = str(t)
-            if os.path.exists(FONT_FILE): return t
-            return remove_accents(t)
-
         # Dodavatel
-        if os.path.exists(FONT_FILE): pdf.set_font('ArialCS', 'B', 11)
+        if use_font: pdf.set_font('ArialCS', 'B', 11)
         else: pdf.set_font('Arial', 'B', 11)
-        pdf.cell(95, 5, wtxt(moje.get('nazev','')), 0, 1)
+        pdf.cell(95, 5, txt(moje.get('nazev','')), 0, 1)
         
-        if os.path.exists(FONT_FILE): pdf.set_font('ArialCS', '', 10)
+        if use_font: pdf.set_font('ArialCS', '', 10)
         else: pdf.set_font('Arial', '', 10)
-        pdf.multi_cell(95, 5, wtxt(f"{moje.get('adresa','')}\nIC: {moje.get('ico','')}\nDIC: {moje.get('dic','')}\n{moje.get('email','')}"))
+        pdf.multi_cell(95, 5, txt(f"{moje.get('adresa','')}\nIC: {moje.get('ico','')}\nDIC: {moje.get('dic','')}\n{moje.get('email','')}"))
         
         # Odběratel
         pdf.set_xy(105, y)
-        if os.path.exists(FONT_FILE): pdf.set_font('ArialCS', 'B', 11)
+        if use_font: pdf.set_font('ArialCS', 'B', 11)
         else: pdf.set_font('Arial', 'B', 11)
-        pdf.cell(95, 5, wtxt(data['k_jmeno']), 0, 1)
+        pdf.cell(95, 5, txt(data['k_jmeno']), 0, 1)
         
         pdf.set_xy(105, pdf.get_y())
-        if os.path.exists(FONT_FILE): pdf.set_font('ArialCS', '', 10)
+        if use_font: pdf.set_font('ArialCS', '', 10)
         else: pdf.set_font('Arial', '', 10)
-        pdf.multi_cell(95, 5, wtxt(f"{data['k_adresa']}\nIC: {data['k_ico']}\nDIC: {data['k_dic']}"))
+        pdf.multi_cell(95, 5, txt(f"{data['k_adresa']}\nIC: {data['k_ico']}\nDIC: {data['k_dic']}"))
         
         pdf.ln(10); pdf.set_fill_color(r, g, b); pdf.rect(10, pdf.get_y(), 190, 2, 'F'); pdf.ln(5)
         
-        if os.path.exists(FONT_FILE): pdf.set_font('ArialCS', 'B', 12)
+        if use_font: pdf.set_font('ArialCS', 'B', 12)
         else: pdf.set_font('Arial', 'B', 12)
-        pdf.cell(100, 8, wtxt(f"Faktura c.: {cislo_f}"), 0, 1)
+        pdf.cell(100, 8, txt(f"Faktura c.: {cislo_f}"), 0, 1)
         
-        if os.path.exists(FONT_FILE): pdf.set_font('ArialCS', '', 10)
+        if use_font: pdf.set_font('ArialCS', '', 10)
         else: pdf.set_font('Arial', '', 10)
         pdf.cell(50, 6, "Vystaveno:", 0, 0); pdf.cell(50, 6, format_date(data['datum_vystaveni']), 0, 1)
         pdf.cell(50, 6, "Splatnost:", 0, 0); pdf.cell(50, 6, format_date(data['datum_splatnosti']), 0, 1)
-        pdf.cell(50, 6, "Ucet:", 0, 0); pdf.cell(50, 6, wtxt(moje.get('ucet','')), 0, 1)
-        pdf.cell(50, 6, "VS:", 0, 0); pdf.cell(50, 6, wtxt(data['variabilni_symbol']), 0, 1)
+        pdf.cell(50, 6, "Ucet:", 0, 0); pdf.cell(50, 6, txt(moje.get('ucet','')), 0, 1)
+        pdf.cell(50, 6, "VS:", 0, 0); pdf.cell(50, 6, txt(data['variabilni_symbol']), 0, 1)
         
         pdf.ln(15); pdf.set_fill_color(240)
-        if os.path.exists(FONT_FILE): pdf.set_font('ArialCS', 'B', 10)
+        if use_font: pdf.set_font('ArialCS', 'B', 10)
         else: pdf.set_font('Arial', 'B', 10)
         pdf.cell(140, 8, "POLOZKA", 1, 0, 'L', True); pdf.cell(50, 8, "CENA", 1, 1, 'R', True)
         
-        if os.path.exists(FONT_FILE): pdf.set_font('ArialCS', '', 10)
+        if use_font: pdf.set_font('ArialCS', '', 10)
         else: pdf.set_font('Arial', '', 10)
         
         for p in polozky:
-            pdf.cell(140, 8, wtxt(p['nazev']), 1); pdf.cell(50, 8, f"{p['cena']:.2f} Kc", 1, 1, 'R')
+            pdf.cell(140, 8, txt(p['nazev']), 1); pdf.cell(50, 8, f"{p['cena']:.2f} Kc", 1, 1, 'R')
             
         pdf.ln(5)
-        if os.path.exists(FONT_FILE): pdf.set_font('ArialCS', 'B', 14)
+        if use_font: pdf.set_font('ArialCS', 'B', 14)
         else: pdf.set_font('Arial', 'B', 14)
         pdf.cell(190, 10, f"CELKEM: {data['castka_celkem']:.2f} Kc", 0, 1, 'R')
         
         if is_pro and moje.get('iban'):
             try:
+                # Pro QR kód se používá jen ASCII, takže neřešíme font
                 ic = moje['iban'].replace(" ", "").upper()
                 qr = f"SPD*1.0*ACC:{ic}*AM:{data['castka_celkem']}*CC:CZK*MSG:{cislo_f}"
                 q = qrcode.make(qr); fn_q = f"q_{faktura_id}.png"; q.save(fn_q)
                 pdf.image(fn_q, 10, pdf.get_y()-20, 30); os.remove(fn_q)
             except: pass
             
+        # ZDE JE TEN ZÁSADNÍ KROK PRO STABILITY
         return pdf.output(dest='S').encode('latin-1')
-    except: return None
+    except Exception as e:
+        print(f"PDF ERROR: {e}")
+        return None
 
 # --- 7. SESSION ---
 if 'user_id' not in st.session_state: st.session_state.user_id = None
@@ -390,9 +409,8 @@ if role == 'admin':
                 if ld: st.info(f"Licence do: {format_date(ld)}")
                 else: st.warning("Bez licence")
                 
-                # VÝBĚR LICENCE PRO UŽIVATELE (Opraveno)
-                free_keys = run_query("SELECT * FROM licencni_klice WHERE pouzito_uzivatelem_id IS NULL ORDER BY id DESC")
-                key_dict = {f"{k['kod']} ({k['dny_platnosti']} dní) - {k['poznamka']}": k for k in free_keys}
+                fk = run_query("SELECT * FROM licencni_klice WHERE pouzito_uzivatelem_id IS NULL ORDER BY id DESC")
+                key_dict = {f"{k['kod']} ({k['dny_platnosti']} dní) - {k['poznamka']}": k for k in fk}
                 sel_key_key = st.selectbox("Přiřadit licenci", ["-- Vyberte klíč --"] + list(key_dict.keys()), key=f"sel_{u['id']}")
                 
                 if st.button("Aktivovat vybranou licenci", key=f"btn_{u['id']}"):
@@ -653,7 +671,6 @@ else:
                                     for item in d.get('faktura_polozky', []):
                                         if item.get('faktura_id') == r.get('id'):
                                             run_command("INSERT INTO faktura_polozky (faktura_id, nazev, cena) VALUES (?,?,?)", (new_fid, item.get('nazev'), item.get('cena')))
-                        
                         st.success("Hotovo! Data byla sloučena."); st.rerun()
                     except Exception as e: st.error(f"Chyba: {e}")
         else:
