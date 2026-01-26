@@ -36,7 +36,7 @@ SYSTEM_EMAIL = {
     "password": email_pass 
 }
 
-DB_FILE = 'fakturace_v26_pro.db'
+DB_FILE = 'fakturace_v27_pro.db'
 
 # --- 1. DESIGN (MOBILE FIRST) ---
 st.set_page_config(page_title="Fakturace Pro", page_icon="💎", layout="centered")
@@ -378,9 +378,9 @@ else:
         if sel_cli != "Všichni": q += " AND k.jmeno=?"; p.append(sel_cli)
         q += " ORDER BY f.id DESC LIMIT 50"
         
-        # --- OPRAVA ZDE ---
-        df_inv = pd.read_sql(q, get_db(), params=p)
-        for index, r in df_inv.iterrows():
+        df_faktury = pd.read_sql(q, get_db(), params=p)
+        for index, r in df_faktury.iterrows():
+            # OPRAVA ZDE: Explicitní převod na slovník
             row = r.to_dict()
             c_full = row.get('cislo_full') if row.get('cislo_full') else f"F{row['id']}"
             
@@ -479,6 +479,10 @@ else:
 
     elif "Nastavení" in menu:
         st.header("Nastavení")
+        # OPRAVA ZDE: Načtení dat jako dict
+        res = run_query("SELECT * FROM nastaveni WHERE user_id=? LIMIT 1", (uid,), single=True)
+        c = dict(res) if res else {}
+        
         with st.expander("🔑 Licence", expanded=True):
             valid, exp = check_license_validity(uid)
             st.info(f"Platnost: **{format_date(exp) if valid else 'Neaktivní'}**")
@@ -501,15 +505,16 @@ else:
                 if u['password_hash']==hash_password(p1): run_command("UPDATE users SET password_hash=? WHERE id=?",(hash_password(p2),uid)); st.success("OK")
                 else: st.error("Chyba")
 
-        c = run_query("SELECT * FROM nastaveni WHERE user_id=? LIMIT 1", (uid,), single=True) or {}
         with st.expander("🏢 Moje Firma"):
             with st.form("setf"):
                 n=st.text_input("Název", c.get('nazev', full_name_display)); a=st.text_area("Adresa", c.get('adresa',''))
                 i=st.text_input("IČO", c.get('ico','')); d=st.text_input("DIČ", c.get('dic',''))
                 b=st.text_input("Banka", c.get('banka','')); u=st.text_input("Účet", c.get('ucet','')); ib=st.text_input("IBAN", c.get('iban',''))
                 if st.form_submit_button("Uložit"):
-                    if c.get('id'): run_command("UPDATE nastaveni SET nazev=?, adresa=?, ico=?, dic=?, banka=?, ucet=?, iban=? WHERE id=?", (n,a,i,d,b,u,ib,c['id']))
-                    else: run_command("INSERT INTO nastaveni (user_id, nazev, adresa, ico, dic, banka, ucet, iban) VALUES (?,?,?,?,?,?,?,?)", (uid,n,a,i,d,b,u,ib))
+                    # Automatická úprava IBANu
+                    ib_clean = ib.replace(" ", "").upper() if ib else ""
+                    if c.get('id'): run_command("UPDATE nastaveni SET nazev=?, adresa=?, ico=?, dic=?, banka=?, ucet=?, iban=? WHERE id=?", (n,a,i,d,b,u,ib_clean,c['id']))
+                    else: run_command("INSERT INTO nastaveni (user_id, nazev, adresa, ico, dic, banka, ucet, iban) VALUES (?,?,?,?,?,?,?,?)", (uid,n,a,i,d,b,u,ib_clean))
                     st.rerun()
         
         with st.expander(f"🔔 Upozornění {'(PRO)' if not is_pro else ''}"):
