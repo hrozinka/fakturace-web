@@ -32,7 +32,7 @@ try:
     admin_pass_init = st.secrets["ADMIN_INIT_PASS"]
 except:
     # Fallback jen pokud secrets neexistují
-    admin_pass_init = os.getenv("ADMIN_INIT_PASS", "admin")
+    admin_pass_init = os.getenv("ADMIN_INIT_PASS")
 
 SYSTEM_EMAIL = {
     "enabled": True, 
