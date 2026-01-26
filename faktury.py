@@ -36,7 +36,7 @@ SYSTEM_EMAIL = {
     "password": email_pass 
 }
 
-DB_FILE = 'fakturace_v27_pro.db'
+DB_FILE = 'fakturace_v28_pro.db'
 
 # --- 1. DESIGN (MOBILE FIRST) ---
 st.set_page_config(page_title="Fakturace Pro", page_icon="💎", layout="centered")
@@ -186,23 +186,32 @@ def generate_pdf(faktura_id, uid, is_pro):
             else: self.set_font('Arial','B',24)
             self.set_text_color(50,50,50); self.cell(0,10,'FAKTURA',0,1,'R'); self.ln(5)
     try:
-        data = run_query("SELECT f.*, k.jmeno as k_jmeno, k.adresa as k_adresa, k.ico as k_ico, k.dic as k_dic, kat.barva, kat.logo_blob FROM faktury f JOIN klienti k ON f.klient_id=k.id JOIN kategorie kat ON f.kategorie_id=kat.id WHERE f.id=? AND f.user_id=?", (faktura_id, uid), single=True)
-        if not data: return "Faktura nenalezena"
+        data = run_query("SELECT f.*, k.jmeno as k_jmeno, k.adresa as k_adresa, k.ico as k_ico, k.dic as k_dic, kat.barva, kat.logo_blob, kat.prefix, kat.aktualni_cislo FROM faktury f JOIN klienti k ON f.klient_id=k.id JOIN kategorie kat ON f.kategorie_id=kat.id WHERE f.id=? AND f.user_id=?", (faktura_id, uid), single=True)
+        if not data: return b"ERROR_DATA"
         polozky = run_query("SELECT * FROM faktura_polozky WHERE faktura_id=?", (faktura_id,))
         moje = run_query("SELECT * FROM nastaveni WHERE user_id=? LIMIT 1", (uid,), single=True) or {}
+        
         pdf = PDF(); pdf.add_page(); pdf.set_font('ArialCS' if os.path.exists('arial.ttf') else 'Arial', '', 10)
+        
         if data['logo_blob']:
             try: fn=f"t_{faktura_id}.png"; open(fn,"wb").write(data['logo_blob']); pdf.image(fn,10,10,30); os.remove(fn)
             except: pass
+        
+        # Color Handling Fix
+        clr = data['barva'] or '#000000'
         if is_pro:
-            try: c = data['barva'].lstrip('#'); r, g, b = tuple(int(c[i:i+2], 16) for i in (0, 2, 4))
-            except: r,g,b=100,100,100
+            try: c = clr.lstrip('#'); r, g, b = tuple(int(c[i:i+2], 16) for i in (0, 2, 4))
+            except: r,g,b=0,0,0
         else: r,g,b = 0,0,0
+        
+        # Fix cislo_full fallback
+        cislo_f = data['cislo_full'] if data['cislo_full'] else f"{data['prefix']}{data['cislo']}"
+
         pdf.set_text_color(100); pdf.set_y(40); pdf.cell(95,5,"DODAVATEL:",0,0); pdf.cell(95,5,"ODBĚRATEL:",0,1); pdf.set_text_color(0); y = pdf.get_y()
         pdf.set_font('', '', 12); pdf.cell(95,5,remove_accents(moje.get('nazev','')),0,1); pdf.set_font('', '', 10); pdf.multi_cell(95,5,remove_accents(f"{moje.get('adresa','')}\nIČ: {moje.get('ico','')}\nDIČ: {moje.get('dic','')}\n{moje.get('email','')}"))
         pdf.set_xy(105,y); pdf.set_font('', '', 12); pdf.cell(95,5,remove_accents(data['k_jmeno']),0,1); pdf.set_xy(105,pdf.get_y()); pdf.set_font('', '', 10); pdf.multi_cell(95,5,remove_accents(f"{data['k_adresa']}\nIČ: {data['k_ico']}\nDIČ: {data['k_dic']}"))
         pdf.ln(10); pdf.set_fill_color(r, g, b); pdf.rect(10,pdf.get_y(),190,2,'F'); pdf.ln(5)
-        pdf.set_font('', '', 14); pdf.cell(100,8,f"Faktura c.: {data['cislo_full']}",0,1); pdf.set_font('', '', 10)
+        pdf.set_font('', '', 14); pdf.cell(100,8,f"Faktura c.: {cislo_f}",0,1); pdf.set_font('', '', 10)
         pdf.cell(50,6,"Vystaveno:",0,0); pdf.cell(50,6,format_date(data['datum_vystaveni']),0,1)
         pdf.cell(50,6,"Splatnost:",0,0); pdf.cell(50,6,format_date(data['datum_splatnosti']),0,1)
         pdf.cell(50,6,"Ucet:",0,0); pdf.cell(50,6,str(moje.get('ucet','')),0,1)
@@ -212,10 +221,12 @@ def generate_pdf(faktura_id, uid, is_pro):
             pdf.cell(140,8,remove_accents(p['nazev']),1); pdf.cell(50,8,f"{p['cena']:.2f} Kc",1,1,'R')
         pdf.ln(5); pdf.set_font('','B',14); pdf.cell(190,10,f"CELKEM: {data['castka_celkem']:.2f} Kc",0,1,'R')
         if is_pro and moje.get('iban'):
-            try: qr=f"SPD*1.0*ACC:{moje['iban']}*AM:{data['castka_celkem']}*CC:CZK*MSG:{data['cislo_full']}"; img=qrcode.make(qr); img.save("q.png"); pdf.image("q.png",10,pdf.get_y()-20,30); os.remove("q.png")
+            try: qr=f"SPD*1.0*ACC:{moje['iban']}*AM:{data['castka_celkem']}*CC:CZK*MSG:{cislo_f}"; img=qrcode.make(qr); img.save("q.png"); pdf.image("q.png",10,pdf.get_y()-20,30); os.remove("q.png")
             except: pass
         return pdf.output(dest='S').encode('latin-1','ignore')
-    except: return b"ERROR"
+    except Exception as e: 
+        print(f"PDF ERROR: {e}")
+        return b"ERROR"
 
 # --- 7. SESSION ---
 if 'user_id' not in st.session_state: st.session_state.user_id = None
@@ -342,9 +353,6 @@ else:
         su_a = run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=? AND uhrazeno=0", (uid,), True)[0] or 0
         st.markdown(f"<div class='stat-container'><div class='stat-box'><div class='stat-label'>OBRAT {sel_year}</div><div class='stat-value text-green'>{sc_y:,.0f} Kč</div></div><div class='stat-box'><div class='stat-label'>CELKEM</div><div class='stat-value text-gold'>{sc_a:,.0f} Kč</div></div><div class='stat-box'><div class='stat-label'>DLUŽÍ</div><div class='stat-value text-red'>{su_a:,.0f} Kč</div></div></div>", unsafe_allow_html=True)
         
-        clients = ["Všichni"] + [c['jmeno'] for c in run_query("SELECT jmeno FROM klienti WHERE user_id=?", (uid,))]
-        sel_cli = st.selectbox("Filtr", clients)
-        
         with st.expander("➕ Nová faktura"):
             kli = pd.read_sql("SELECT id, jmeno FROM klienti WHERE user_id=?", get_db(), params=(uid,))
             kat = pd.read_sql("SELECT id, nazev FROM kategorie WHERE user_id=?", get_db(), params=(uid,))
@@ -374,16 +382,22 @@ else:
                 else: st.warning("Vyberte data.")
 
         st.markdown("<br>", unsafe_allow_html=True)
+        clients = ["Všichni"] + [c['jmeno'] for c in run_query("SELECT jmeno FROM klienti WHERE user_id=?", (uid,))]
+        sel_cli = st.selectbox("Filtr", clients)
+        
+        if sel_cli != "Všichni":
+            sc_k = run_query("SELECT SUM(f.castka_celkem) FROM faktury f JOIN klienti k ON f.klient_id=k.id WHERE f.user_id=? AND k.jmeno=?", (uid, sel_cli), True)[0] or 0
+            su_k = run_query("SELECT SUM(f.castka_celkem) FROM faktury f JOIN klienti k ON f.klient_id=k.id WHERE f.user_id=? AND k.jmeno=? AND f.uhrazeno=0", (uid, sel_cli), True)[0] or 0
+            st.markdown(f"<div class='stat-container'><div class='stat-box'><div class='stat-label'>{sel_cli} CELKEM</div><div class='stat-value text-gold'>{sc_k:,.0f} Kč</div></div><div class='stat-box'><div class='stat-label'>{sel_cli} DLUŽÍ</div><div class='stat-value text-red'>{su_k:,.0f} Kč</div></div></div>", unsafe_allow_html=True)
+
         q = "SELECT f.*, k.jmeno FROM faktury f JOIN klienti k ON f.klient_id=k.id WHERE f.user_id=?"; p = [uid]
         if sel_cli != "Všichni": q += " AND k.jmeno=?"; p.append(sel_cli)
         q += " ORDER BY f.id DESC LIMIT 50"
         
         df_faktury = pd.read_sql(q, get_db(), params=p)
         for index, r in df_faktury.iterrows():
-            # OPRAVA ZDE: Explicitní převod na slovník
             row = r.to_dict()
             c_full = row.get('cislo_full') if row.get('cislo_full') else f"F{row['id']}"
-            
             with st.expander(f"{'✅' if row['uhrazeno'] else '⏳'} {c_full} | {row['jmeno']} | {row['castka_celkem']:.0f} Kč"):
                 c1,c2,c3 = st.columns([1,1,1])
                 if row['uhrazeno']: 
@@ -396,7 +410,6 @@ else:
                 f_edit_key = f"edit_f_{row['id']}"
                 if f_edit_key not in st.session_state: st.session_state[f_edit_key] = False
                 if c3.button("✏️ Upravit", key=f"be_{row['id']}"): st.session_state[f_edit_key] = True; st.rerun()
-                
                 if st.session_state[f_edit_key]:
                     with st.form(f"fe_{row['id']}"):
                         nd = st.date_input("Splatnost", pd.to_datetime(row['datum_splatnosti']))
@@ -410,14 +423,12 @@ else:
                             run_command("UPDATE faktury SET datum_splatnosti=?, muj_popis=?, castka_celkem=? WHERE id=?", (nd, nm, ntot, row['id']))
                             run_command("DELETE FROM faktura_polozky WHERE faktura_id=?", (row['id'],))
                             for idx2, rw in ned.iterrows():
-                                iname = rw.get("Popis položky", "")
-                                iprice = rw.get("Cena", 0.0)
+                                iname = rw.get("Popis položky", ""); iprice = rw.get("Cena", 0.0)
                                 if iname:
                                     try: ip_float = float(iprice)
                                     except: ip_float = 0.0
                                     run_command("INSERT INTO faktura_polozky (faktura_id, nazev, cena) VALUES (?,?,?)", (row['id'], iname, ip_float))
                             st.session_state[f_edit_key] = False; st.rerun()
-                
                 if st.button("Smazat", key=f"bd_{row['id']}"): run_command("DELETE FROM faktury WHERE id=?",(row['id'],)); st.rerun()
 
     elif "Klienti" in menu:
@@ -479,7 +490,6 @@ else:
 
     elif "Nastavení" in menu:
         st.header("Nastavení")
-        # OPRAVA ZDE: Načtení dat jako dict
         res = run_query("SELECT * FROM nastaveni WHERE user_id=? LIMIT 1", (uid,), single=True)
         c = dict(res) if res else {}
         
@@ -511,10 +521,9 @@ else:
                 i=st.text_input("IČO", c.get('ico','')); d=st.text_input("DIČ", c.get('dic',''))
                 b=st.text_input("Banka", c.get('banka','')); u=st.text_input("Účet", c.get('ucet','')); ib=st.text_input("IBAN", c.get('iban',''))
                 if st.form_submit_button("Uložit"):
-                    # Automatická úprava IBANu
-                    ib_clean = ib.replace(" ", "").upper() if ib else ""
-                    if c.get('id'): run_command("UPDATE nastaveni SET nazev=?, adresa=?, ico=?, dic=?, banka=?, ucet=?, iban=? WHERE id=?", (n,a,i,d,b,u,ib_clean,c['id']))
-                    else: run_command("INSERT INTO nastaveni (user_id, nazev, adresa, ico, dic, banka, ucet, iban) VALUES (?,?,?,?,?,?,?,?)", (uid,n,a,i,d,b,u,ib_clean))
+                    ib_cl = ib.replace(" ", "").upper() if ib else ""
+                    if c.get('id'): run_command("UPDATE nastaveni SET nazev=?, adresa=?, ico=?, dic=?, banka=?, ucet=?, iban=? WHERE id=?", (n,a,i,d,b,u,ib_cl,c['id']))
+                    else: run_command("INSERT INTO nastaveni (user_id, nazev, adresa, ico, dic, banka, ucet, iban) VALUES (?,?,?,?,?,?,?,?)", (uid,n,a,i,d,b,u,ib_cl))
                     st.rerun()
         
         with st.expander(f"🔔 Upozornění {'(PRO)' if not is_pro else ''}"):
