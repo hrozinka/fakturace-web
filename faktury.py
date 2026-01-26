@@ -37,10 +37,10 @@ SYSTEM_EMAIL = {
     "port": 465,
     "email": "jsem@michalkochtik.cz", 
     "password": email_pass,
-    "display_name": "MojeFakturace" # Jméno odesílatele
+    "display_name": "MojeFakturace"
 }
 
-DB_FILE = 'fakturace_v33_pro.db'
+DB_FILE = 'fakturace_v34_pro.db'
 
 # --- 1. DESIGN (MOBILE FIRST) ---
 st.set_page_config(page_title="Fakturace Pro", page_icon="💎", layout="centered")
@@ -180,21 +180,15 @@ def process_logo(uploaded_file):
         img_byte_arr = io.BytesIO(); image.save(img_byte_arr, format='PNG'); return img_byte_arr.getvalue()
     except: return None
 
-# --- E-MAILY (UPRAVENO: DISPLAY NAME) ---
+# --- E-MAILY ---
 def send_email_custom(to_email, subject, body):
     if not SYSTEM_EMAIL["enabled"] or not SYSTEM_EMAIL["password"]: return False
     try:
-        msg = MIMEMultipart()
-        # Použití jména odesílatele "MojeFakturace"
-        msg['From'] = formataddr((SYSTEM_EMAIL["display_name"], SYSTEM_EMAIL["email"]))
-        msg['To'] = to_email
-        msg['Subject'] = subject
+        msg = MIMEMultipart(); msg['From'] = formataddr((SYSTEM_EMAIL["display_name"], SYSTEM_EMAIL["email"])); msg['To'] = to_email; msg['Subject'] = subject
         msg.attach(MIMEText(body, 'plain'))
-        
         server = smtplib.SMTP_SSL(SYSTEM_EMAIL["server"], SYSTEM_EMAIL["port"])
         server.login(SYSTEM_EMAIL["email"], SYSTEM_EMAIL["password"])
-        server.sendmail(SYSTEM_EMAIL["email"], to_email, msg.as_string())
-        server.quit()
+        server.sendmail(SYSTEM_EMAIL["email"], to_email, msg.as_string()); server.quit()
         return True
     except: return False
 
@@ -207,38 +201,31 @@ def send_welcome_email_db(to_email, full_name):
         return send_email_custom(to_email, subj, body)
     except: return False
 
-# --- PDF GENERATOR (SAFE MODE) ---
+# --- GENERATOR PDF (ULTRA BEZPEČNÝ) ---
 def generate_pdf(faktura_id, uid, is_pro):
-    import qrcode
-    
-    # Helper pro bezpečný text (odstranění diakritiky pro standardní fonty)
-    def safe_txt(text):
-        return remove_accents(str(text)) if text else ""
-
-    class PDF(FPDF):
-        def header(self):
-            # Použijeme standardní Arial/Helvetica, která je v PDF vždy
-            self.set_font('Arial', 'B', 24)
-            self.set_text_color(50, 50, 50)
-            self.cell(0, 10, 'FAKTURA', 0, 1, 'R')
-            self.ln(5)
+    # Funkce pro bezpečný text (odstraní vše kromě základních znaků)
+    def clean_text(text):
+        if not text: return ""
+        text = str(text)
+        # Odstranění diakritiky
+        text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('ascii')
+        return text
 
     try:
-        # Načtení dat
         data = run_query("SELECT f.*, k.jmeno as k_jmeno, k.adresa as k_adresa, k.ico as k_ico, k.dic as k_dic, kat.barva, kat.logo_blob, kat.prefix FROM faktury f JOIN klienti k ON f.klient_id=k.id JOIN kategorie kat ON f.kategorie_id=kat.id WHERE f.id=? AND f.user_id=?", (faktura_id, uid), single=True)
-        if not data: return None # Vrať None, Streamlit pak nezobrazí tlačítko
+        if not data: return None
         
         polozky = run_query("SELECT * FROM faktura_polozky WHERE faktura_id=?", (faktura_id,))
         moje = run_query("SELECT * FROM nastaveni WHERE user_id=? LIMIT 1", (uid,), single=True) or {}
         
-        pdf = PDF()
+        pdf = FPDF()
         pdf.add_page()
-        pdf.set_font('Arial', '', 10)
+        pdf.set_font('Arial', '', 10) # Standardní font (bez diakritiky)
 
-        # Logo - bezpečné vložení
+        # Logo
         if data['logo_blob']:
             try:
-                fn = f"temp_logo_{faktura_id}.png"
+                fn = f"tmp_l_{faktura_id}.png"
                 with open(fn, "wb") as f: f.write(data['logo_blob'])
                 pdf.image(fn, 10, 10, 30)
                 os.remove(fn)
@@ -252,64 +239,73 @@ def generate_pdf(faktura_id, uid, is_pro):
                 r, g, b = tuple(int(c[i:i+2], 16) for i in (0, 2, 4))
             except: pass
 
-        # Číslo faktury
         cislo_f = data['cislo_full'] if data['cislo_full'] else f"{data['prefix']}{data['cislo']}"
 
+        # HLAVIČKA
+        pdf.set_font('Arial', 'B', 24)
+        pdf.set_text_color(50, 50, 50)
+        pdf.cell(0, 10, 'FAKTURA', 0, 1, 'R')
+        pdf.ln(5)
+
+        # ADRESY
         pdf.set_text_color(100); pdf.set_y(40)
+        pdf.set_font('Arial', '', 10)
         pdf.cell(95, 5, "DODAVATEL:", 0, 0); pdf.cell(95, 5, "ODBERATEL:", 0, 1)
         pdf.set_text_color(0)
         
         y = pdf.get_y()
         # Dodavatel
-        pdf.set_font('', '', 12); pdf.cell(95, 5, safe_txt(moje.get('nazev','')), 0, 1)
-        pdf.set_font('', '', 10)
-        pdf.multi_cell(95, 5, safe_txt(f"{moje.get('adresa','')}\nIC: {moje.get('ico','')}\nDIC: {moje.get('dic','')}\n{moje.get('email','')}"))
+        pdf.set_font('Arial', 'B', 11); pdf.cell(95, 5, clean_text(moje.get('nazev','')), 0, 1)
+        pdf.set_font('Arial', '', 10)
+        pdf.multi_cell(95, 5, clean_text(f"{moje.get('adresa','')}\nIC: {moje.get('ico','')}\nDIC: {moje.get('dic','')}\n{moje.get('email','')}"))
         
         # Odběratel
         pdf.set_xy(105, y)
-        pdf.set_font('', '', 12); pdf.cell(95, 5, safe_txt(data['k_jmeno']), 0, 1)
+        pdf.set_font('Arial', 'B', 11); pdf.cell(95, 5, clean_text(data['k_jmeno']), 0, 1)
         pdf.set_xy(105, pdf.get_y())
-        pdf.set_font('', '', 10)
-        pdf.multi_cell(95, 5, safe_txt(f"{data['k_adresa']}\nIC: {data['k_ico']}\nDIC: {data['k_dic']}"))
+        pdf.set_font('Arial', '', 10)
+        pdf.multi_cell(95, 5, clean_text(f"{data['k_adresa']}\nIC: {data['k_ico']}\nDIC: {data['k_dic']}"))
         
         pdf.ln(10)
         pdf.set_fill_color(r, g, b); pdf.rect(10, pdf.get_y(), 190, 2, 'F'); pdf.ln(5)
         
-        pdf.set_font('', '', 14); pdf.cell(100, 8, safe_txt(f"Faktura c.: {cislo_f}"), 0, 1)
-        pdf.set_font('', '', 10)
-        
-        # Detaily
+        # INFO O FAKTUŘE
+        pdf.set_font('Arial', 'B', 12); pdf.cell(100, 8, clean_text(f"Faktura c.: {cislo_f}"), 0, 1)
+        pdf.set_font('Arial', '', 10)
         pdf.cell(50, 6, "Vystaveno:", 0, 0); pdf.cell(50, 6, format_date(data['datum_vystaveni']), 0, 1)
         pdf.cell(50, 6, "Splatnost:", 0, 0); pdf.cell(50, 6, format_date(data['datum_splatnosti']), 0, 1)
-        pdf.cell(50, 6, "Ucet:", 0, 0); pdf.cell(50, 6, safe_txt(moje.get('ucet','')), 0, 1)
-        pdf.cell(50, 6, "VS:", 0, 0); pdf.cell(50, 6, safe_txt(data['variabilni_symbol']), 0, 1)
+        pdf.cell(50, 6, "Ucet:", 0, 0); pdf.cell(50, 6, clean_text(moje.get('ucet','')), 0, 1)
+        pdf.cell(50, 6, "VS:", 0, 0); pdf.cell(50, 6, clean_text(data['variabilni_symbol']), 0, 1)
         
+        # POLOŽKY
         pdf.ln(15)
         pdf.set_fill_color(240)
+        pdf.set_font('Arial', 'B', 10)
         pdf.cell(140, 8, "POLOZKA", 1, 0, 'L', True); pdf.cell(50, 8, "CENA", 1, 1, 'R', True)
+        pdf.set_font('Arial', '', 10)
         
         for p in polozky:
-            pdf.cell(140, 8, safe_txt(p['nazev']), 1)
+            pdf.cell(140, 8, clean_text(p['nazev']), 1)
             pdf.cell(50, 8, f"{p['cena']:.2f} Kc", 1, 1, 'R')
             
         pdf.ln(5)
-        pdf.set_font('', 'B', 14)
+        pdf.set_font('Arial', 'B', 14)
         pdf.cell(190, 10, f"CELKEM: {data['castka_celkem']:.2f} Kc", 0, 1, 'R')
         
+        # QR KÓD
         if is_pro and moje.get('iban'):
             try:
+                import qrcode
                 qr_str = f"SPD*1.0*ACC:{moje['iban']}*AM:{data['castka_celkem']}*CC:CZK*MSG:{cislo_f}"
                 img = qrcode.make(qr_str)
-                img.save("temp_qr.png")
-                pdf.image("temp_qr.png", 10, pdf.get_y()-20, 30)
-                os.remove("temp_qr.png")
-            except: pass
+                img.save("tmp_qr.png")
+                pdf.image("tmp_qr.png", 10, pdf.get_y()-20, 30)
+                os.remove("tmp_qr.png")
+            except: pass # Pokud chybí knihovna nebo selže gen, ignorujeme
             
-        # DŮLEŽITÉ: Převod na latin-1 string pro Streamlit download button
-        return pdf.output(dest='S').encode('latin-1', 'ignore')
-        
+        return pdf.output(dest='S').encode('latin-1', 'replace')
     except Exception as e:
-        print(f"PDF GEN ERROR: {e}")
+        print(f"PDF FATAL: {e}")
         return None
 
 # --- 7. SESSION ---
@@ -391,7 +387,6 @@ if st.sidebar.button("Odhlásit"): st.session_state.user_id=None; st.rerun()
 if role == 'admin':
     st.header("👑 Admin Sekce")
     tabs = st.tabs(["Uživatelé", "Licence", "Statistiky", "📧 E-mailing"])
-    
     with tabs[0]:
         users = run_query("SELECT * FROM users WHERE role!='admin' ORDER BY id DESC")
         for u in users:
@@ -498,7 +493,7 @@ else:
         clients = ["Všichni"] + [c['jmeno'] for c in run_query("SELECT jmeno FROM klienti WHERE user_id=?", (uid,))]
         sel_cli = st.selectbox("Klient", clients)
         
-        # Nový filtr roků - UPRAVENO: Přidána možnost "Všechny roky"
+        # UPRAVENO: Automaticky "Všechny roky" + načtení všech roků z DB
         available_years_q = "SELECT DISTINCT strftime('%Y', datum_vystaveni) FROM faktury WHERE user_id=?"
         available_years_p = [uid]
         if sel_cli != "Všichni":
@@ -507,15 +502,14 @@ else:
         
         av_years = [y[0] for y in run_query(available_years_q, tuple(available_years_p))]
         year_opts = ["Všechny roky"] + sorted(av_years, reverse=True)
-        sel_year_filter = st.selectbox("Rok", year_opts)
+        sel_year_filter = st.selectbox("Rok", year_opts) # Default je index 0 ("Všechny roky")
 
-        # Malé statistiky pro filtr
+        # Malé statistiky
         if sel_cli != "Všichni":
             sc_k = run_query("SELECT SUM(f.castka_celkem) FROM faktury f JOIN klienti k ON f.klient_id=k.id WHERE f.user_id=? AND k.jmeno=?", (uid, sel_cli), True)[0] or 0
             su_k = run_query("SELECT SUM(f.castka_celkem) FROM faktury f JOIN klienti k ON f.klient_id=k.id WHERE f.user_id=? AND k.jmeno=? AND f.uhrazeno=0", (uid, sel_cli), True)[0] or 0
             st.markdown(f"<div class='stat-container'><div class='stat-box'><div class='stat-label'>{sel_cli} CELKEM</div><div class='stat-value text-gold'>{sc_k:,.0f} Kč</div></div><div class='stat-box'><div class='stat-label'>{sel_cli} DLUŽÍ</div><div class='stat-value text-red'>{su_k:,.0f} Kč</div></div></div>", unsafe_allow_html=True)
 
-        # Sestavení query
         q = "SELECT f.*, k.jmeno FROM faktury f JOIN klienti k ON f.klient_id=k.id WHERE f.user_id=?"; p = [uid]
         if sel_cli != "Všichni":
             q += " AND k.jmeno=?"; p.append(sel_cli)
@@ -534,8 +528,13 @@ else:
                     if c1.button("Zrušit úhradu", key=f"u0_{row['id']}"): run_command("UPDATE faktury SET uhrazeno=0 WHERE id=?",(row['id'],)); st.rerun()
                 else: 
                     if c1.button("Zaplaceno", key=f"u1_{row['id']}"): run_command("UPDATE faktury SET uhrazeno=1 WHERE id=?",(row['id'],)); st.rerun()
-                pdf = generate_pdf(row['id'], uid, is_pro)
-                if isinstance(pdf, bytes): c2.download_button("PDF", pdf, f"{c_full}.pdf", "application/pdf", key=f"pd_{row['id']}")
+                
+                # PDF GENERACE (S OPRAVOU CHYBY)
+                pdf_bytes = generate_pdf(row['id'], uid, is_pro)
+                if pdf_bytes:
+                    c2.download_button("PDF", pdf_bytes, f"{c_full}.pdf", "application/pdf", key=f"pd_{row['id']}")
+                else:
+                    c2.error("Chyba PDF")
                 
                 f_edit_key = f"edit_f_{row['id']}"
                 if f_edit_key not in st.session_state: st.session_state[f_edit_key] = False
