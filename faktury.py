@@ -106,6 +106,7 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS klienti (id INTEGER PRIMARY KEY, user_id INTEGER, jmeno TEXT, adresa TEXT, ico TEXT, dic TEXT, email TEXT, poznamka TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS kategorie (id INTEGER PRIMARY KEY, user_id INTEGER, nazev TEXT, barva TEXT, prefix TEXT, aktualni_cislo INTEGER DEFAULT 1, logo_blob BLOB)''')
     
+    # Ujištění, že existuje sloupec cislo_full
     c.execute('''CREATE TABLE IF NOT EXISTS faktury (id INTEGER PRIMARY KEY, user_id INTEGER, cislo INTEGER, cislo_full TEXT, klient_id INTEGER, kategorie_id INTEGER, datum_vystaveni TEXT, datum_duzp TEXT, datum_splatnosti TEXT, castka_celkem REAL, zpusob_uhrady TEXT, variabilni_symbol TEXT, cislo_objednavky TEXT, uvodni_text TEXT, uhrazeno INTEGER DEFAULT 0, muj_popis TEXT)''')
     try: c.execute("ALTER TABLE faktury ADD COLUMN cislo_full TEXT")
     except: pass
@@ -353,34 +354,20 @@ else:
             else:
                 rid = st.session_state.form_reset_id; c1,c2 = st.columns(2)
                 sk = c1.selectbox("Klient", kli['jmeno'], key=f"k_{rid}"); sc = c2.selectbox("Kategorie", kat['nazev'], key=f"c_{rid}")
-                
                 k_sub = kli[kli['jmeno']==sk]; c_sub = kat[kat['nazev']==sc]
-                
                 if not k_sub.empty and not c_sub.empty:
                     kid = int(k_sub['id'].values[0]); cid = int(c_sub['id'].values[0])
                     _, full, _ = get_next_invoice_number(cid, uid); st.info(f"Doklad: {full}")
                     d1,d2 = st.columns(2); dv = d1.date_input("Vystavení", date.today(), key=f"d1_{rid}"); ds = d2.date_input("Splatnost", date.today()+timedelta(14), key=f"d2_{rid}")
                     ed = st.data_editor(st.session_state.items_df, num_rows="dynamic", use_container_width=True, key=f"e_{rid}")
-                    
-                    try: tot = float(pd.to_numeric(ed["Cena"], errors='coerce').fillna(0).sum())
-                    except: tot = 0.0
-                    
-                    st.write(f"**Celkem: {tot:,.2f} Kč**")
-                    
+                    tot = float(pd.to_numeric(ed["Cena"], errors='coerce').fillna(0).sum()); st.write(f"**Celkem: {tot:,.2f} Kč**")
                     if st.button("Vystavit", type="primary", key=f"b_{rid}"):
                         fid = run_command("INSERT INTO faktury (user_id, cislo_full, klient_id, kategorie_id, datum_vystaveni, datum_splatnosti, castka_celkem, variabilni_symbol) VALUES (?,?,?,?,?,?,?,?)", (uid, full, kid, cid, dv, ds, tot, re.sub(r"\D", "", full)))
-                        
-                        # --- FIX: BEZPEČNÝ IMPORT POLOŽEK ---
-                        for index, row in ed.iterrows():
-                            # Bezpečné načtení hodnot, i když se DataFrame změní
-                            inazev = row.get("Popis položky", "")
-                            icena = row.get("Cena", 0.0)
-                            if inazev:
-                                try: icena_float = float(icena)
-                                except: icena_float = 0.0
-                                run_command("INSERT INTO faktura_polozky (faktura_id, nazev, cena) VALUES (?,?,?)", (fid, inazev, icena_float))
-                        # ------------------------------------
-
+                        for _, r in ed.iterrows():
+                            # Bezpečný převod ceny
+                            try: c_val = float(r.get("Cena", 0))
+                            except: c_val = 0.0
+                            if r.get("Popis položky"): run_command("INSERT INTO faktura_polozky (faktura_id, nazev, cena) VALUES (?,?,?)", (fid, r["Popis položky"], c_val))
                         run_command("UPDATE kategorie SET aktualni_cislo = aktualni_cislo + 1 WHERE id = ?", (cid,)); reset_forms(); st.success("OK"); st.rerun()
                 else: st.warning("Vyberte data.")
 
@@ -391,7 +378,8 @@ else:
         
         for r in pd.read_sql(q, get_db(), params=p).iterrows():
             row = dict(r)
-            c_full = row.get('cislo_full', f"F{row.get('id')}")
+            # FIX: Zajištění existence klíče
+            c_full = row.get('cislo_full') if row.get('cislo_full') else f"F{row['id']}"
             
             with st.expander(f"{'✅' if row['uhrazeno'] else '⏳'} {c_full} | {row['jmeno']} | {row['castka_celkem']:.0f} Kč"):
                 c1,c2,c3 = st.columns([1,1,1])
@@ -402,6 +390,7 @@ else:
                 pdf = generate_pdf(row['id'], uid, is_pro)
                 if isinstance(pdf, bytes): c2.download_button("PDF", pdf, f"{c_full}.pdf", "application/pdf", key=f"pd_{row['id']}")
                 
+                # EDITACE FAKTURY
                 f_edit_key = f"edit_f_{row['id']}"
                 if f_edit_key not in st.session_state: st.session_state[f_edit_key] = False
                 if c3.button("✏️ Upravit", key=f"be_{row['id']}"): st.session_state[f_edit_key] = True; st.rerun()
@@ -413,20 +402,15 @@ else:
                         cur_i = pd.read_sql("SELECT nazev as 'Popis položky', cena as 'Cena' FROM faktura_polozky WHERE faktura_id=?", get_db(), params=(row['id'],))
                         ned = st.data_editor(cur_i, num_rows="dynamic", use_container_width=True)
                         if st.form_submit_button("Uložit změny"):
-                            # FIX PRO EDITACI
                             ntot = 0.0
                             try: ntot = float(pd.to_numeric(ned["Cena"], errors='coerce').fillna(0).sum())
                             except: pass
-                            
                             run_command("UPDATE faktury SET datum_splatnosti=?, muj_popis=?, castka_celkem=? WHERE id=?", (nd, nm, ntot, row['id']))
                             run_command("DELETE FROM faktura_polozky WHERE faktura_id=?", (row['id'],))
-                            for idx, rw in ned.iterrows():
-                                iname = rw.get("Popis položky", "")
-                                iprice = rw.get("Cena", 0.0)
-                                if iname:
-                                    try: ip_float = float(iprice)
-                                    except: ip_float = 0.0
-                                    run_command("INSERT INTO faktura_polozky (faktura_id, nazev, cena) VALUES (?,?,?)", (row['id'], iname, ip_float))
+                            for _, rw in ned.iterrows(): 
+                                try: ip = float(rw.get("Cena", 0))
+                                except: ip = 0.0
+                                if rw.get("Popis položky"): run_command("INSERT INTO faktura_polozky (faktura_id, nazev, cena) VALUES (?,?,?)", (row['id'], rw["Popis položky"], ip))
                             st.session_state[f_edit_key] = False; st.rerun()
                 
                 if st.button("Smazat", key=f"bd_{row['id']}"): run_command("DELETE FROM faktury WHERE id=?",(row['id'],)); st.rerun()
@@ -441,7 +425,7 @@ else:
                 if c2.button("ARES",key=f"b_{rid}"):
                     d=get_ares_data(ico); 
                     if d: st.session_state.ares_data=d; st.success("OK")
-                    else: st.error("Nenalezeno (zkuste zadat ručně)")
+                    else: st.error("Nenalezeno")
                 ad = st.session_state.ares_data
                 with st.form("fc"):
                     j=st.text_input("Jméno", ad.get('jmeno','')); a=st.text_area("Adresa", ad.get('adresa',''))
@@ -450,13 +434,11 @@ else:
         for k in run_query("SELECT * FROM klienti WHERE user_id=?", (uid,)):
             with st.expander(k['jmeno']):
                 if k['poznamka']: st.info(k['poznamka'])
-                # EDITACE KLIENTA
                 ekey = f"ek_{k['id']}"
                 if ekey not in st.session_state: st.session_state[ekey] = False
-                c1,c2 = st.columns(2)
+                c1,c2=st.columns(2)
                 if c1.button("✏️ Upravit", key=f"bek_{k['id']}"): st.session_state[ekey] = True; st.rerun()
                 if c2.button("Smazat", key=f"bdk_{k['id']}"): run_command("DELETE FROM klienti WHERE id=?",(k['id'],)); st.rerun()
-                
                 if st.session_state[ekey]:
                     with st.form(f"fek_{k['id']}"):
                         nj=st.text_input("Jméno", k['jmeno']); na=st.text_area("Adresa", k['adresa'])
@@ -475,23 +457,19 @@ else:
                     if st.form_submit_button("Uložit"): run_command("INSERT INTO kategorie (user_id, nazev, prefix, aktualni_cislo, barva, logo_blob) VALUES (?,?,?,?,?,?)", (uid,n,p,s,c,process_logo(l))); st.rerun()
         for k in run_query("SELECT * FROM kategorie WHERE user_id=?", (uid,)):
             with st.expander(k['nazev']):
-                # EDITACE KATEGORIE
                 eckey = f"eck_{k['id']}"
                 if eckey not in st.session_state: st.session_state[eckey] = False
                 c1,c2 = st.columns(2)
-                
                 if is_pro:
                     if c1.button("✏️ Upravit", key=f"bec_{k['id']}"): st.session_state[eckey] = True; st.rerun()
-                else:
-                    c1.button("🔒 Upravit", key=f"bec_{k['id']}", disabled=True)
-                    
+                else: c1.button("🔒 Upravit", disabled=True, key=f"ld_{k['id']}")
                 if c2.button("Smazat", key=f"bdc_{k['id']}"): run_command("DELETE FROM kategorie WHERE id=?", (k['id'],)); st.rerun()
                 
                 if st.session_state[eckey]:
                     with st.form(f"feck_{k['id']}"):
                         nn=st.text_input("Název", k['nazev']); np=st.text_input("Prefix", k['prefix'])
                         ns=st.number_input("Číslo", value=k['aktualni_cislo']); nc=st.color_picker("Barva", k['barva'])
-                        if st.form_submit_button("Uložit"):
+                        if st.form_submit_button("Uložit změny"):
                             run_command("UPDATE kategorie SET nazev=?, prefix=?, aktualni_cislo=?, barva=? WHERE id=?", (nn,np,ns,nc,k['id']))
                             st.session_state[eckey]=False; st.rerun()
 
@@ -530,13 +508,16 @@ else:
                     else: run_command("INSERT INTO nastaveni (user_id, nazev, adresa, ico, dic, banka, ucet, iban) VALUES (?,?,?,?,?,?,?,?)", (uid,n,a,i,d,b,u,ib))
                     st.rerun()
         
-        if is_pro:
-            with st.expander("🔔 SMTP Nastavení (PRO)"):
+        with st.expander(f"🔔 Upozornění {'(PRO)' if not is_pro else ''}"):
+            if not is_pro: st.warning("🔒 Pouze pro PRO verzi.")
+            else:
                 act = st.toggle("Aktivní", value=bool(c.get('notify_active', 0)))
                 ne = st.text_input("Email", value=c.get('notify_email',''))
                 if st.button("Uložit SMTP"):
                     run_command("UPDATE nastaveni SET notify_active=?, notify_email=? WHERE id=?", (int(act), ne, c.get('id'))); st.success("Uloženo")
 
+        # ZÁLOHOVÁNÍ (PRO ONLY)
+        if is_pro:
             with st.expander("💾 Zálohování dat (PRO)"):
                 def get_bk():
                     data={}
@@ -576,4 +557,5 @@ else:
                         st.success("Obnoveno!"); st.rerun()
                     except: st.error("Chyba souboru")
         else:
-            with st.expander("💾 Zálohování"): st.info("Zálohování dostupné v PRO verzi.")
+            with st.expander("💾 Zálohování"):
+                st.info("Zálohování je dostupné pouze v PRO verzi.")
