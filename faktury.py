@@ -12,6 +12,7 @@ import base64
 import pandas as pd
 import random
 import string
+import time
 from datetime import datetime, date, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -36,7 +37,7 @@ SYSTEM_EMAIL = {
     "password": email_pass 
 }
 
-DB_FILE = 'fakturace_v29_pro.db'
+DB_FILE = 'fakturace_v30_pro.db'
 
 # --- 1. DESIGN (MOBILE FIRST) ---
 st.set_page_config(page_title="Fakturace Pro", page_icon="💎", layout="centered")
@@ -113,6 +114,14 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS faktura_polozky (id INTEGER PRIMARY KEY, faktura_id INTEGER, nazev TEXT, cena REAL)''')
     c.execute('''CREATE TABLE IF NOT EXISTS licencni_klice (id INTEGER PRIMARY KEY, kod TEXT UNIQUE, dny_platnosti INTEGER, vygenerovano TEXT, pouzito_uzivatelem_id INTEGER, poznamka TEXT)''')
     
+    # NOVÁ TABULKA PRO ŠABLONY E-MAILŮ
+    c.execute('''CREATE TABLE IF NOT EXISTS email_templates (id INTEGER PRIMARY KEY, name TEXT UNIQUE, subject TEXT, body TEXT)''')
+    
+    # Vložení výchozího uvítacího e-mailu
+    try:
+        c.execute("INSERT OR IGNORE INTO email_templates (name, subject, body) VALUES ('welcome', 'Vítejte v Fakturace Pro', 'Dobrý den {name},\n\nVáš účet byl úspěšně vytvořen.\n\nAť se daří!\nTým Fakturace Pro')")
+    except: pass
+
     try:
         adm_hash = hashlib.sha256(str.encode(admin_pass_init)).hexdigest()
         c.execute("INSERT OR IGNORE INTO users (username, password_hash, role, full_name, email, phone, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)", ("admin", adm_hash, "admin", "Super Admin", "admin@system.cz", "000000000", datetime.now().isoformat()))
@@ -165,6 +174,7 @@ def get_ares_data(ico):
     except: pass
     return None
 
+# --- E-MAILOVÉ FUNKCE (UPRAVENO) ---
 def send_email_custom(to_email, subject, body):
     if not SYSTEM_EMAIL["enabled"] or not SYSTEM_EMAIL["password"]: return False
     try:
@@ -176,17 +186,23 @@ def send_email_custom(to_email, subject, body):
         return True
     except: return False
 
-# --- OPRAVENÁ FUNKCE PRO LOGO ---
-def process_logo(uploaded_file):
-    if uploaded_file is None:
-        return None
+def send_welcome_email_db(to_email, full_name):
+    """Odesílá uvítací email na základě šablony v DB."""
+    if not SYSTEM_EMAIL["enabled"] or not SYSTEM_EMAIL["password"]: return False
     try:
-        image = Image.open(uploaded_file)
-        img_byte_arr = io.BytesIO()
-        image.save(img_byte_arr, format='PNG')
-        return img_byte_arr.getvalue()
-    except:
-        return None
+        # Načtení šablony
+        tpl = run_query("SELECT subject, body FROM email_templates WHERE name='welcome'", single=True)
+        if not tpl:
+            # Fallback pokud není v DB
+            subj = "Vítejte"
+            body = f"Dobrý den {full_name},\n\nVáš účet byl vytvořen."
+        else:
+            subj = tpl['subject']
+            # Nahrazení placeholderu {name}
+            body = tpl['body'].replace("{name}", full_name)
+
+        return send_email_custom(to_email, subj, body)
+    except: return False
 
 def generate_pdf(faktura_id, uid, is_pro):
     from fpdf import FPDF; import qrcode
@@ -266,7 +282,8 @@ if not st.session_state.user_id:
                 if st.form_submit_button("Vytvořit účet", use_container_width=True):
                     try:
                         run_command("INSERT INTO users (username,password_hash,full_name,email,phone,created_at,force_password_change) VALUES (?,?,?,?,?,?,0)",(u,hash_password(p),f,e,t_tel,datetime.now().isoformat()))
-                        send_email_custom(e, "Vítejte", f"Dobrý den {f},\nVáš účet byl vytvořen."); st.success("Hotovo! Přihlašte se."); 
+                        send_welcome_email_db(e, f)
+                        st.success("Hotovo! Přihlašte se."); 
                     except: st.error("Login obsazen.")
         with t3:
             with st.form("forgot"):
@@ -306,7 +323,8 @@ if st.sidebar.button("Odhlásit"): st.session_state.user_id=None; st.rerun()
 # ADMIN
 if role == 'admin':
     st.header("👑 Admin Sekce")
-    tabs = st.tabs(["Uživatelé", "Licence", "Statistiky"])
+    tabs = st.tabs(["Uživatelé", "Licence", "Statistiky", "📧 E-mailing"])
+    
     with tabs[0]:
         users = run_query("SELECT * FROM users WHERE role!='admin' ORDER BY id DESC")
         for u in users:
@@ -337,6 +355,34 @@ if role == 'admin':
         for k in keys:
             status = "✅ Volný" if not k['pouzito_uzivatelem_id'] else f"❌ Použit (ID: {k['pouzito_uzivatelem_id']})"
             st.code(f"{k['kod']} | {k['dny_platnosti']} dní | {status} | {k['poznamka']}")
+    
+    with tabs[3]:
+        st.subheader("Uvítací e-mail")
+        tpl = run_query("SELECT * FROM email_templates WHERE name='welcome'", single=True)
+        if tpl:
+            with st.form("welcome_mail"):
+                w_subj = st.text_input("Předmět", value=tpl['subject'])
+                w_body = st.text_area("Text e-mailu (použij {name} pro jméno)", value=tpl['body'], height=200)
+                if st.form_submit_button("Uložit šablonu"):
+                    run_command("UPDATE email_templates SET subject=?, body=? WHERE name='welcome'", (w_subj, w_body))
+                    st.success("Uloženo")
+        
+        st.divider()
+        st.subheader("Hromadné rozesílání")
+        with st.form("mass_mail"):
+            m_subj = st.text_input("Předmět zprávy")
+            m_body = st.text_area("Text zprávy", height=200)
+            if st.form_submit_button("ODESLAT VŠEM", type="primary"):
+                all_users = run_query("SELECT email FROM users WHERE role!='admin' AND email IS NOT NULL")
+                if all_users:
+                    prog = st.progress(0); total = len(all_users)
+                    for i, u_mail in enumerate(all_users):
+                        send_email_custom(u_mail['email'], m_subj, m_body)
+                        prog.progress((i + 1) / total)
+                        time.sleep(0.1) # Prevence zahlcení SMTP
+                    st.success(f"Odesláno {total} uživatelům.")
+                else:
+                    st.warning("Žádní uživatelé k odeslání.")
 
 # USER
 else:
@@ -399,6 +445,7 @@ else:
         for index, r in df_faktury.iterrows():
             row = r.to_dict()
             c_full = row.get('cislo_full') if row.get('cislo_full') else f"F{row['id']}"
+            
             with st.expander(f"{'✅' if row['uhrazeno'] else '⏳'} {c_full} | {row['jmeno']} | {row['castka_celkem']:.0f} Kč"):
                 c1,c2,c3 = st.columns([1,1,1])
                 if row['uhrazeno']: 
@@ -411,6 +458,7 @@ else:
                 f_edit_key = f"edit_f_{row['id']}"
                 if f_edit_key not in st.session_state: st.session_state[f_edit_key] = False
                 if c3.button("✏️ Upravit", key=f"be_{row['id']}"): st.session_state[f_edit_key] = True; st.rerun()
+                
                 if st.session_state[f_edit_key]:
                     with st.form(f"fe_{row['id']}"):
                         nd = st.date_input("Splatnost", pd.to_datetime(row['datum_splatnosti']))
@@ -424,12 +472,14 @@ else:
                             run_command("UPDATE faktury SET datum_splatnosti=?, muj_popis=?, castka_celkem=? WHERE id=?", (nd, nm, ntot, row['id']))
                             run_command("DELETE FROM faktura_polozky WHERE faktura_id=?", (row['id'],))
                             for idx2, rw in ned.iterrows():
-                                iname = rw.get("Popis položky", ""); iprice = rw.get("Cena", 0.0)
+                                iname = rw.get("Popis položky", "")
+                                iprice = rw.get("Cena", 0.0)
                                 if iname:
                                     try: ip_float = float(iprice)
                                     except: ip_float = 0.0
                                     run_command("INSERT INTO faktura_polozky (faktura_id, nazev, cena) VALUES (?,?,?)", (row['id'], iname, ip_float))
                             st.session_state[f_edit_key] = False; st.rerun()
+                
                 if st.button("Smazat", key=f"bd_{row['id']}"): run_command("DELETE FROM faktury WHERE id=?",(row['id'],)); st.rerun()
 
     elif "Klienti" in menu:
