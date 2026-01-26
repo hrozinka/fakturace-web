@@ -23,16 +23,20 @@ import qrcode
 
 # --- 0. KONFIGURACE ---
 try:
-    email_pass = st.secrets["EMAIL_PASSWORD"]
+   email_pass = st.secrets["EMAIL_PASSWORD"]
 except:
     email_pass = os.getenv("EMAIL_PASSWORD", "")
 
-# --- UPRAVENO: Načítání admin hesla ze secrets ---
 try:
+    # Zkusíme načíst hesla. Pokud neexistují, aplikace spadne (což je bezpečné).
+    email_pass = st.secrets["EMAIL_PASSWORD"]
     admin_pass_init = st.secrets["ADMIN_INIT_PASS"]
-except:
-    # Fallback jen pokud secrets neexistují
-    admin_pass_init = os.getenv("ADMIN_INIT_PASS")
+except Exception as e:
+    # Pokud chybí secrets.toml, vypíšeme chybu a zastavíme aplikaci.
+    # Žádné heslo "admin" už nebude fungovat!
+    st.error("⛔ CHYBA BEZPEČNOSTI: Chybí soubor .streamlit/secrets.toml nebo heslo ADMIN_INIT_PASS!")
+    st.info("Vytvořte složku .streamlit a v ní soubor secrets.toml s vaším heslem.")
+    st.stop()
 
 SYSTEM_EMAIL = {
     "enabled": True, 
