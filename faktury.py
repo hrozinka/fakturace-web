@@ -41,7 +41,7 @@ SYSTEM_EMAIL = {
     "display_name": "MojeFakturace"
 }
 
-DB_FILE = 'fakturace_v48_debug.db' # Nová DB pro jistotu
+DB_FILE = 'fakturace_v48_fixed.db'
 FONT_FILE = 'arial.ttf' 
 
 # --- 1. DESIGN ---
@@ -110,8 +110,10 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS faktura_polozky (id INTEGER PRIMARY KEY, faktura_id INTEGER, nazev TEXT, cena REAL)''')
     c.execute('''CREATE TABLE IF NOT EXISTS licencni_klice (id INTEGER PRIMARY KEY, kod TEXT UNIQUE, dny_platnosti INTEGER, vygenerovano TEXT, pouzito_uzivatelem_id INTEGER, poznamka TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS email_templates (id INTEGER PRIMARY KEY, name TEXT UNIQUE, subject TEXT, body TEXT)''')
+    
     try: c.execute("INSERT OR IGNORE INTO email_templates (name, subject, body) VALUES ('welcome', 'Vítejte ve vašem fakturačním systému', 'Dobrý den {name},\n\nVáš účet byl úspěšně vytvořen.\n\nS pozdravem,\nTým MojeFakturace')")
     except: pass
+    
     try:
         adm_hash = hashlib.sha256(str.encode(admin_pass_init)).hexdigest()
         c.execute("INSERT OR IGNORE INTO users (username, password_hash, role, full_name, email, phone, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)", ("admin", adm_hash, "admin", "Super Admin", "admin@system.cz", "000000000", datetime.now().isoformat()))
@@ -159,7 +161,7 @@ def process_logo(uploaded_file):
     if not uploaded_file: return None
     try:
         img = Image.open(uploaded_file)
-        if img.mode in ("RGBA", "P"): img = img.convert("RGB")
+        if img.mode != "RGBA": img = img.convert("RGBA")
         b = io.BytesIO(); img.save(b, format='PNG'); return b.getvalue()
     except: return None
 
@@ -172,11 +174,11 @@ def send_email_custom(to, sub, body):
 
 def send_welcome_email_db(to, name):
     tpl = run_query("SELECT subject, body FROM email_templates WHERE name='welcome'", single=True)
-    # Default text
-    def_sub = "Vítejte ve vašem fakturačním systému"
-    def_body = f"Dobrý den {name},\n\nVáš účet byl úspěšně vytvořen.\n\nS pozdravem,\nTým MojeFakturace"
+    # Default text pokud DB selže (pojistka)
+    s_def = "Vítejte ve vašem fakturačním systému"
+    b_def = f"Dobrý den {name},\n\nVáš účet byl úspěšně vytvořen.\n\nS pozdravem,\nTým MojeFakturace"
     
-    s, b = (tpl['subject'], tpl['body'].replace("{name}", name)) if tpl else (def_sub, def_body)
+    s, b = (tpl['subject'], tpl['body'].replace("{name}", name)) if tpl else (s_def, b_def)
     return send_email_custom(to, s, b)
 
 def get_export_data(user_id):
@@ -194,7 +196,7 @@ def get_export_data(user_id):
     finally: conn.close()
     return json.dumps(export_data, default=str)
 
-# --- GENERACE PDF (DEBUG MODE) ---
+# --- PDF GENERACE (OPRAVENÁ KONVERZE DICT) ---
 def generate_pdf(faktura_id, uid, is_pro):
     use_font = os.path.exists(FONT_FILE)
     
@@ -221,11 +223,18 @@ def generate_pdf(faktura_id, uid, is_pro):
             self.ln(5)
 
     try:
-        data = run_query("SELECT f.*, k.jmeno as k_jmeno, k.adresa as k_adresa, k.ico as k_ico, k.dic as k_dic, kat.barva, kat.logo_blob, kat.prefix FROM faktury f JOIN klienti k ON f.klient_id=k.id JOIN kategorie kat ON f.kategorie_id=kat.id WHERE f.id=? AND f.user_id=?", (faktura_id, uid), single=True)
-        if not data: return None
+        # NAČTENÍ DAT A OKAMŽITÁ KONVERZE NA DICT PRO BEZPEČNOST
+        raw_data = run_query("SELECT f.*, k.jmeno as k_jmeno, k.adresa as k_adresa, k.ico as k_ico, k.dic as k_dic, kat.barva, kat.logo_blob, kat.prefix FROM faktury f JOIN klienti k ON f.klient_id=k.id JOIN kategorie kat ON f.kategorie_id=kat.id WHERE f.id=? AND f.user_id=?", (faktura_id, uid), single=True)
+        if not raw_data: return None
         
-        polozky = run_query("SELECT * FROM faktura_polozky WHERE faktura_id=?", (faktura_id,))
-        moje = run_query("SELECT * FROM nastaveni WHERE user_id=? LIMIT 1", (uid,), single=True) or {}
+        # Konverze Row -> dict (OPRAVA CHYBY "no attribute get")
+        data = dict(raw_data)
+        
+        polozky_rows = run_query("SELECT * FROM faktura_polozky WHERE faktura_id=?", (faktura_id,))
+        polozky = [dict(p) for p in polozky_rows] if polozky_rows else []
+        
+        moje_row = run_query("SELECT * FROM nastaveni WHERE user_id=? LIMIT 1", (uid,), single=True)
+        moje = dict(moje_row) if moje_row else {}
         
         pdf = PDF()
         pdf.add_page()
@@ -234,17 +243,17 @@ def generate_pdf(faktura_id, uid, is_pro):
         else: pdf.set_font('Arial', '', 10)
 
         # Logo
-        if data['logo_blob']:
+        if data.get('logo_blob'):
             try:
-                fn = f"l_{faktura_id}_{random.randint(100,999)}.png"
+                fn = f"l_{faktura_id}.png"
                 with open(fn, "wb") as f: f.write(data['logo_blob'])
                 pdf.image(fn, 10, 10, 30)
                 os.remove(fn)
             except: pass 
 
-        cislo_f = data['cislo_full'] if data['cislo_full'] else f"{data['prefix']}{data['cislo']}"
+        cislo_f = data.get('cislo_full') if data.get('cislo_full') else f"{data.get('prefix','')}{data.get('cislo','')}"
         r, g, b = 0, 0, 0
-        if is_pro and data['barva']:
+        if is_pro and data.get('barva'):
             try: c = data['barva'].lstrip('#'); r, g, b = tuple(int(c[i:i+2], 16) for i in (0, 2, 4))
             except: pass
 
@@ -252,6 +261,7 @@ def generate_pdf(faktura_id, uid, is_pro):
         pdf.cell(95, 5, "DODAVATEL:", 0, 0); pdf.cell(95, 5, "ODBĚRATEL:", 0, 1); pdf.set_text_color(0)
         y = pdf.get_y()
         
+        # Dodavatel
         if use_font: pdf.set_font('ArialCS', 'B', 11)
         else: pdf.set_font('Arial', 'B', 11)
         pdf.cell(95, 5, txt(moje.get('nazev','')), 0, 1)
@@ -260,15 +270,16 @@ def generate_pdf(faktura_id, uid, is_pro):
         else: pdf.set_font('Arial', '', 10)
         pdf.multi_cell(95, 5, txt(f"{moje.get('adresa','')}\nIC: {moje.get('ico','')}\nDIC: {moje.get('dic','')}\n{moje.get('email','')}"))
         
+        # Odběratel
         pdf.set_xy(105, y)
         if use_font: pdf.set_font('ArialCS', 'B', 11)
         else: pdf.set_font('Arial', 'B', 11)
-        pdf.cell(95, 5, txt(data['k_jmeno']), 0, 1)
+        pdf.cell(95, 5, txt(data.get('k_jmeno')), 0, 1)
         
         pdf.set_xy(105, pdf.get_y())
         if use_font: pdf.set_font('ArialCS', '', 10)
         else: pdf.set_font('Arial', '', 10)
-        pdf.multi_cell(95, 5, txt(f"{data['k_adresa']}\nIC: {data['k_ico']}\nDIC: {data['k_dic']}"))
+        pdf.multi_cell(95, 5, txt(f"{data.get('k_adresa')}\nIC: {data.get('k_ico')}\nDIC: {data.get('k_dic')}"))
         
         pdf.ln(10); pdf.set_fill_color(r, g, b); pdf.rect(10, pdf.get_y(), 190, 2, 'F'); pdf.ln(5)
         
@@ -278,10 +289,10 @@ def generate_pdf(faktura_id, uid, is_pro):
         
         if use_font: pdf.set_font('ArialCS', '', 10)
         else: pdf.set_font('Arial', '', 10)
-        pdf.cell(50, 6, "Vystaveno:", 0, 0); pdf.cell(50, 6, format_date(data['datum_vystaveni']), 0, 1)
-        pdf.cell(50, 6, "Splatnost:", 0, 0); pdf.cell(50, 6, format_date(data['datum_splatnosti']), 0, 1)
+        pdf.cell(50, 6, "Vystaveno:", 0, 0); pdf.cell(50, 6, format_date(data.get('datum_vystaveni')), 0, 1)
+        pdf.cell(50, 6, "Splatnost:", 0, 0); pdf.cell(50, 6, format_date(data.get('datum_splatnosti')), 0, 1)
         pdf.cell(50, 6, "Ucet:", 0, 0); pdf.cell(50, 6, txt(moje.get('ucet','')), 0, 1)
-        pdf.cell(50, 6, "VS:", 0, 0); pdf.cell(50, 6, txt(data['variabilni_symbol']), 0, 1)
+        pdf.cell(50, 6, "VS:", 0, 0); pdf.cell(50, 6, txt(data.get('variabilni_symbol')), 0, 1)
         
         pdf.ln(15); pdf.set_fill_color(240)
         if use_font: pdf.set_font('ArialCS', 'B', 10)
@@ -292,39 +303,26 @@ def generate_pdf(faktura_id, uid, is_pro):
         else: pdf.set_font('Arial', '', 10)
         
         for p in polozky:
-            pdf.cell(140, 8, txt(p['nazev']), 1); pdf.cell(50, 8, f"{p['cena']:.2f} Kc", 1, 1, 'R')
+            pdf.cell(140, 8, txt(p.get('nazev')), 1)
+            pdf.cell(50, 8, f"{p.get('cena',0):.2f} Kc", 1, 1, 'R')
             
         pdf.ln(5)
         if use_font: pdf.set_font('ArialCS', 'B', 14)
         else: pdf.set_font('Arial', 'B', 14)
-        pdf.cell(190, 10, f"CELKEM: {data['castka_celkem']:.2f} Kc", 0, 1, 'R')
+        pdf.cell(190, 10, f"CELKEM: {data.get('castka_celkem',0):.2f} Kc", 0, 1, 'R')
         
-        # --- QR KÓD (IZOLOVANÝ) ---
-        # Pokud selže QR kód, faktura se vygeneruje bez něj, ale nespadne
         if is_pro and moje.get('iban'):
             try:
-                iban_clean = str(moje['iban']).replace(" ", "").upper()
-                if iban_clean:
-                    # Konstrukce SPAYD řetězce
-                    qr_str = f"SPD*1.0*ACC:{iban_clean}*AM:{data['castka_celkem']}*CC:CZK*MSG:{cislo_f}"
-                    # Generování obrázku
-                    qr_img = qrcode.make(qr_str)
-                    fn_qr = f"qr_{faktura_id}_{random.randint(100,999)}.png"
-                    qr_img.save(fn_qr)
-                    # Vložení do PDF
-                    pdf.image(fn_qr, 10, pdf.get_y()-20, 30)
-                    # Úklid
-                    os.remove(fn_qr)
-            except Exception as e:
-                # Tady chybu ignorujeme (jen ji vypíšeme do konzole serveru), aby uživatel dostal aspoň PDF bez QR
-                print(f"QR Error: {e}")
-                pass
+                ic = str(moje['iban']).replace(" ", "").upper()
+                qr = f"SPD*1.0*ACC:{ic}*AM:{data.get('castka_celkem')}*CC:CZK*MSG:{cislo_f}"
+                q = qrcode.make(qr); fn_q = f"q_{faktura_id}.png"; q.save(fn_q)
+                pdf.image(fn_q, 10, pdf.get_y()-20, 30); os.remove(fn_q)
+            except: pass
             
         return pdf.output(dest='S').encode('latin-1')
-        
     except Exception as e:
-        # Vracíme text chyby, aby se zobrazila v UI
-        return f"ERROR: {str(e)}"
+        print(f"PDF ERROR: {e}")
+        return f"CHYBA: {str(e)}" # Vratí chybu jako string pro zobrazení
 
 # --- 7. SESSION ---
 if 'user_id' not in st.session_state: st.session_state.user_id = None
@@ -433,8 +431,12 @@ if role == 'admin':
         for k in run_query("SELECT * FROM licencni_klice ORDER BY id DESC"): st.code(f"{k['kod']} | {k['dny_platnosti']} dní | {'🔴 Použit' if k['pouzito_uzivatelem_id'] else '🟢 Volný'} | {k['poznamka']}")
     with tabs[3]:
         tpl = run_query("SELECT * FROM email_templates WHERE name='welcome'", single=True)
+        # Použití dict() pro bezpečný přístup v případě, že je tpl Row
+        tpl_dict = dict(tpl) if tpl else {}
+        
         with st.form("wm"):
-            ws = st.text_input("Předmět", value=tpl['subject'] if tpl else ""); wb = st.text_area("Text", value=tpl['body'] if tpl else "")
+            ws = st.text_input("Předmět", value=tpl_dict.get('subject', ''))
+            wb = st.text_area("Text", value=tpl_dict.get('body', ''))
             if st.form_submit_button("Uložit"): run_command("INSERT OR REPLACE INTO email_templates (id, name, subject, body) VALUES ((SELECT id FROM email_templates WHERE name='welcome'), 'welcome', ?, ?)", (ws, wb)); st.success("OK")
         with st.form("mm"):
             ms = st.text_input("Předmět"); mb = st.text_area("Zpráva")
@@ -506,14 +508,11 @@ else:
                     if c1.button("Zaplaceno", key=f"u1_{row['id']}"): run_command("UPDATE faktury SET uhrazeno=1 WHERE id=?",(row['id'],)); st.rerun()
                 
                 pdf_output = generate_pdf(row['id'], uid, is_pro)
-                
-                # Zpracování výstupu (PDF nebo Chybová hláška)
                 if isinstance(pdf_output, bytes):
                     c2.download_button("PDF", pdf_output, f"{cf}.pdf", "application/pdf", key=f"pd_{row['id']}")
                 else:
-                    # Pokud se vrátí text (chyba), zobrazíme ji červeně
-                    if pdf_output: st.error(pdf_output)
-                    else: st.error("Chyba PDF")
+                    if pdf_output: c2.error(pdf_output)
+                    else: c2.error("Chyba PDF")
                 
                 f_edit_key = f"edit_f_{row['id']}"
                 if f_edit_key not in st.session_state: st.session_state[f_edit_key] = False
@@ -596,6 +595,7 @@ else:
 
     elif "Nastavení" in menu:
         st.header("Nastavení")
+        # Získání dat firmy a konverze na dict (FIX CHYBY)
         res = run_query("SELECT * FROM nastaveni WHERE user_id=? LIMIT 1", (uid,), single=True)
         c = dict(res) if res else {}
         
@@ -622,9 +622,15 @@ else:
 
         with st.expander("🏢 Moje Firma"):
             with st.form("setf"):
-                n=st.text_input("Název", c.get('nazev', full_name_display)); a=st.text_area("Adresa", c.get('adresa',''))
-                i=st.text_input("IČO", c.get('ico','')); d=st.text_input("DIČ", c.get('dic',''))
-                b=st.text_input("Banka", c.get('banka','')); u=st.text_input("Účet", c.get('ucet','')); ib=st.text_input("IBAN", c.get('iban',''))
+                # Použití .get() na dict c (nikoliv na Row)
+                n=st.text_input("Název", c.get('nazev', full_name_display))
+                a=st.text_area("Adresa", c.get('adresa',''))
+                i=st.text_input("IČO", c.get('ico',''))
+                d=st.text_input("DIČ", c.get('dic',''))
+                b=st.text_input("Banka", c.get('banka',''))
+                u=st.text_input("Účet", c.get('ucet',''))
+                ib=st.text_input("IBAN", c.get('iban',''))
+                
                 if st.form_submit_button("Uložit"):
                     ib_cl = ib.replace(" ", "").upper() if ib else ""
                     if c.get('id'): run_command("UPDATE nastaveni SET nazev=?, adresa=?, ico=?, dic=?, banka=?, ucet=?, iban=? WHERE id=?", (n,a,i,d,b,u,ib_cl,c['id']))
