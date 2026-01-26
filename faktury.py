@@ -27,10 +27,12 @@ try:
 except:
     email_pass = os.getenv("EMAIL_PASSWORD", "")
 
+# --- UPRAVENO: Načítání admin hesla ze secrets ---
 try:
     admin_pass_init = st.secrets["ADMIN_INIT_PASS"]
 except:
-    admin_pass_init = "admin"
+    # Fallback jen pokud secrets neexistují
+    admin_pass_init = os.getenv("ADMIN_INIT_PASS", "admin")
 
 SYSTEM_EMAIL = {
     "enabled": True, 
@@ -41,7 +43,7 @@ SYSTEM_EMAIL = {
     "display_name": "MojeFakturace"
 }
 
-DB_FILE = 'fakturace_v47_final.db' # Databáze zůstává (struktura už tam je)
+DB_FILE = 'fakturace_v47_final.db' 
 FONT_FILE = 'arial.ttf' 
 
 # --- 1. DESIGN ---
@@ -196,7 +198,7 @@ def get_export_data(user_id):
     finally: conn.close()
     return json.dumps(export_data, default=str)
 
-# --- PDF GENERACE (S VYLEPŠENOU GRAFIKOU TABULKY) ---
+# --- PDF GENERACE ---
 def generate_pdf(faktura_id, uid, is_pro):
     use_font = os.path.exists(FONT_FILE)
     
@@ -244,7 +246,7 @@ def generate_pdf(faktura_id, uid, is_pro):
             try:
                 fn = f"l_{faktura_id}.png"
                 with open(fn, "wb") as f: f.write(data['logo_blob'])
-                pdf.image(fn, 10, 10, 50) # Větší logo
+                pdf.image(fn, 10, 10, 50)
                 os.remove(fn)
             except: pass 
 
@@ -255,7 +257,7 @@ def generate_pdf(faktura_id, uid, is_pro):
             except: pass
 
         pdf.set_text_color(100)
-        pdf.set_y(55) # Posunuto dolů kvůli logu
+        pdf.set_y(55)
         pdf.cell(95, 5, "DODAVATEL:", 0, 0); pdf.cell(95, 5, "ODBĚRATEL:", 0, 1); pdf.set_text_color(0)
         y = pdf.get_y()
         
@@ -298,36 +300,39 @@ def generate_pdf(faktura_id, uid, is_pro):
             pdf.ln(8)
             pdf.multi_cell(190, 5, txt(uvodni_t))
         
-        # --- TABULKA POLOŽEK (NOVÝ DESIGN) ---
+        # --- TABULKA POLOŽEK ---
         pdf.ln(10)
-        # Hlavička s šedým pozadím a tučným textem
         pdf.set_fill_color(240, 240, 240) 
         if use_font: pdf.set_font('ArialCS', 'B', 10)
         else: pdf.set_font('Arial', 'B', 10)
         
-        pdf.cell(140, 10, "POLOZKA", 0, 0, 'L', True)
+        # UPRAVENO: Název sloupce na POLOŽKY (s diakritikou přes txt)
+        pdf.cell(140, 10, txt("POLOŽKY"), 0, 0, 'L', True)
         pdf.cell(50, 10, "CENA", 0, 1, 'R', True)
         
-        # Položky
         if use_font: pdf.set_font('ArialCS', '', 10)
         else: pdf.set_font('Arial', '', 10)
         
-        # Linka pod hlavičkou
         pdf.set_draw_color(200, 200, 200)
         pdf.line(10, pdf.get_y(), 200, pdf.get_y())
         
         for p in polozky:
-            pdf.cell(140, 8, txt(p.get('nazev')), 0, 0, 'L')
-            pdf.cell(50, 8, f"{p.get('cena',0):.2f} Kc", 0, 1, 'R')
-            # Tenká linka pod každou položkou
+            # UPRAVENO: Filtr prázdných položek
+            nazev = p.get('nazev')
+            if not nazev or str(nazev).strip() == "":
+                continue # Přeskočit prázdné
+                
+            pdf.cell(140, 8, txt(nazev), 0, 0, 'L')
+            # UPRAVENO: Měna Kč
+            pdf.cell(50, 8, f"{p.get('cena',0):.2f} {txt('Kč')}", 0, 1, 'R')
             pdf.line(10, pdf.get_y(), 200, pdf.get_y())
             
         pdf.ln(5)
         if use_font: pdf.set_font('ArialCS', 'B', 14)
         else: pdf.set_font('Arial', 'B', 14)
         
-        # Zvýrazněná celková cena
-        pdf.cell(190, 10, f"CELKEM: {data.get('castka_celkem',0):.2f} Kc", 0, 1, 'R')
+        # UPRAVENO: Měna Kč u celkové částky
+        pdf.cell(190, 10, f"CELKEM: {data.get('castka_celkem',0):.2f} {txt('Kč')}", 0, 1, 'R')
         
         if is_pro and moje.get('iban'):
             try:
@@ -338,7 +343,6 @@ def generate_pdf(faktura_id, uid, is_pro):
                 qr = f"SPD*1.0*ACC:{ic}*AM:{data.get('castka_celkem')}*CC:CZK*X-VS:{vs_code}*MSG:{msg_val}"
                 q = qrcode.make(qr); fn_q = f"q_{faktura_id}.png"; q.save(fn_q)
                 
-                # QR Kód pod textem
                 pdf.image(fn_q, 10, pdf.get_y()+2, 30)
                 os.remove(fn_q)
             except: pass
@@ -495,7 +499,6 @@ else:
                     _, full, _ = get_next_invoice_number(cid, uid); st.info(f"Doklad: {full}")
                     d1,d2 = st.columns(2); dv = d1.date_input("Vystavení", date.today(), key=f"d1_{rid}"); ds = d2.date_input("Splatnost", date.today()+timedelta(14), key=f"d2_{rid}")
                     
-                    # NOVÉ: Úvodní text (input)
                     ut = st.text_input("Úvodní text", "Fakturujeme Vám:", key=f"ut_{rid}")
                     
                     ed = st.data_editor(st.session_state.items_df, num_rows="dynamic", use_container_width=True, key=f"e_{rid}")
@@ -505,7 +508,6 @@ else:
                     st.markdown(f"**💰 Celkem k úhradě: {total_sum:,.2f} Kč**")
                     
                     if st.button("Vystavit", type="primary", key=f"b_{rid}"):
-                        # Vložení s úvodním textem
                         fid = run_command("INSERT INTO faktury (user_id, cislo_full, klient_id, kategorie_id, datum_vystaveni, datum_splatnosti, castka_celkem, variabilni_symbol, uvodni_text) VALUES (?,?,?,?,?,?,?,?,?)", (uid, full, kid, cid, dv, ds, total_sum, re.sub(r"\D", "", full), ut))
                         for _, r in ed.iterrows(): 
                             if r.get("Popis položky"): run_command("INSERT INTO faktura_polozky (faktura_id, nazev, cena) VALUES (?,?,?)", (fid, r["Popis položky"], float(r.get("Cena", 0))))
@@ -550,14 +552,12 @@ else:
                     with st.form(f"fe_{row['id']}"):
                         nd = st.date_input("Splatnost", pd.to_datetime(row['datum_splatnosti']))
                         nm = st.text_input("Popis", row['muj_popis'] or "")
-                        # NOVÉ: Editace úvodního textu
                         nut = st.text_input("Úvodní text", row['uvodni_text'] or "")
                         
                         cur_i = pd.read_sql("SELECT nazev as 'Popis položky', cena as 'Cena' FROM faktura_polozky WHERE faktura_id=?", get_db(), params=(row['id'],))
                         ned = st.data_editor(cur_i, num_rows="dynamic", use_container_width=True)
                         if st.form_submit_button("Uložit změny"):
                             ntot = float(pd.to_numeric(ned["Cena"], errors='coerce').fillna(0).sum())
-                            # Update i s úvodním textem
                             run_command("UPDATE faktury SET datum_splatnosti=?, muj_popis=?, castka_celkem=?, uvodni_text=? WHERE id=?", (nd, nm, ntot, nut, row['id']))
                             run_command("DELETE FROM faktura_polozky WHERE faktura_id=?", (row['id'],))
                             for _, rw in ned.iterrows():
@@ -653,7 +653,6 @@ else:
 
         with st.expander("🏢 Moje Firma"):
             with st.form("setf"):
-                # Použití .get() na dict c (nikoliv na Row)
                 n=st.text_input("Název", c.get('nazev', full_name_display))
                 a=st.text_area("Adresa", c.get('adresa',''))
                 i=st.text_input("IČO", c.get('ico',''))
