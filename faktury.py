@@ -41,7 +41,7 @@ SYSTEM_EMAIL = {
     "display_name": "MojeFakturace"
 }
 
-DB_FILE = 'fakturace_v48_fixed.db'
+DB_FILE = 'fakturace_v48_fixed.db' # Databáze zůstává stejná
 FONT_FILE = 'arial.ttf' 
 
 # --- 1. DESIGN ---
@@ -161,7 +161,7 @@ def process_logo(uploaded_file):
     if not uploaded_file: return None
     try:
         img = Image.open(uploaded_file)
-        if img.mode != "RGBA": img = img.convert("RGBA")
+        if img.mode in ("RGBA", "P"): img = img.convert("RGB")
         b = io.BytesIO(); img.save(b, format='PNG'); return b.getvalue()
     except: return None
 
@@ -196,7 +196,7 @@ def get_export_data(user_id):
     finally: conn.close()
     return json.dumps(export_data, default=str)
 
-# --- PDF GENERACE (OPRAVENÁ KONVERZE DICT) ---
+# --- PDF GENERACE (OPRAVENÁ POZICE QR) ---
 def generate_pdf(faktura_id, uid, is_pro):
     use_font = os.path.exists(FONT_FILE)
     
@@ -223,11 +223,8 @@ def generate_pdf(faktura_id, uid, is_pro):
             self.ln(5)
 
     try:
-        # NAČTENÍ DAT A OKAMŽITÁ KONVERZE NA DICT PRO BEZPEČNOST
         raw_data = run_query("SELECT f.*, k.jmeno as k_jmeno, k.adresa as k_adresa, k.ico as k_ico, k.dic as k_dic, kat.barva, kat.logo_blob, kat.prefix FROM faktury f JOIN klienti k ON f.klient_id=k.id JOIN kategorie kat ON f.kategorie_id=kat.id WHERE f.id=? AND f.user_id=?", (faktura_id, uid), single=True)
         if not raw_data: return None
-        
-        # Konverze Row -> dict (OPRAVA CHYBY "no attribute get")
         data = dict(raw_data)
         
         polozky_rows = run_query("SELECT * FROM faktura_polozky WHERE faktura_id=?", (faktura_id,))
@@ -316,13 +313,18 @@ def generate_pdf(faktura_id, uid, is_pro):
                 ic = str(moje['iban']).replace(" ", "").upper()
                 qr = f"SPD*1.0*ACC:{ic}*AM:{data.get('castka_celkem')}*CC:CZK*MSG:{cislo_f}"
                 q = qrcode.make(qr); fn_q = f"q_{faktura_id}.png"; q.save(fn_q)
-                pdf.image(fn_q, 10, pdf.get_y()-20, 30); os.remove(fn_q)
+                
+                # ZMĚNA POZICE:
+                # pdf.get_y() vrací spodní hranu posledního textu (CELKEM).
+                # Přidáme 2 jednotky, aby QR kód začal až pod textem.
+                pdf.image(fn_q, 10, pdf.get_y() + 2, 30)
+                os.remove(fn_q)
             except: pass
             
         return pdf.output(dest='S').encode('latin-1')
     except Exception as e:
         print(f"PDF ERROR: {e}")
-        return f"CHYBA: {str(e)}" # Vratí chybu jako string pro zobrazení
+        return f"CHYBA: {str(e)}"
 
 # --- 7. SESSION ---
 if 'user_id' not in st.session_state: st.session_state.user_id = None
@@ -595,7 +597,6 @@ else:
 
     elif "Nastavení" in menu:
         st.header("Nastavení")
-        # Získání dat firmy a konverze na dict (FIX CHYBY)
         res = run_query("SELECT * FROM nastaveni WHERE user_id=? LIMIT 1", (uid,), single=True)
         c = dict(res) if res else {}
         
