@@ -1,8 +1,7 @@
 streamlit
 pandas
-fpdf
 requests
+fpdf
 qrcode
-urllib3
 Pillow
-openpyxl
+rembg
