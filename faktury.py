@@ -16,8 +16,9 @@ import time
 from datetime import datetime, date, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.utils import formataddr
 from PIL import Image
-from fpdf import FPDF # Import zde pro jistotu
+from fpdf import FPDF
 
 # --- 0. KONFIGURACE ---
 try:
@@ -35,10 +36,11 @@ SYSTEM_EMAIL = {
     "server": "smtp.seznam.cz",
     "port": 465,
     "email": "jsem@michalkochtik.cz", 
-    "password": email_pass 
+    "password": email_pass,
+    "display_name": "MojeFakturace" # Jméno odesílatele
 }
 
-DB_FILE = 'fakturace_v32_pro.db'
+DB_FILE = 'fakturace_v33_pro.db'
 
 # --- 1. DESIGN (MOBILE FIRST) ---
 st.set_page_config(page_title="Fakturace Pro", page_icon="💎", layout="centered")
@@ -107,9 +109,11 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS nastaveni (id INTEGER PRIMARY KEY, user_id INTEGER, nazev TEXT, adresa TEXT, ico TEXT, dic TEXT, ucet TEXT, banka TEXT, email TEXT, telefon TEXT, iban TEXT, smtp_server TEXT, smtp_port INTEGER, smtp_email TEXT, smtp_password TEXT, notify_email TEXT, notify_days INTEGER, notify_active INTEGER)''')
     c.execute('''CREATE TABLE IF NOT EXISTS klienti (id INTEGER PRIMARY KEY, user_id INTEGER, jmeno TEXT, adresa TEXT, ico TEXT, dic TEXT, email TEXT, poznamka TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS kategorie (id INTEGER PRIMARY KEY, user_id INTEGER, nazev TEXT, barva TEXT, prefix TEXT, aktualni_cislo INTEGER DEFAULT 1, logo_blob BLOB)''')
+    
     c.execute('''CREATE TABLE IF NOT EXISTS faktury (id INTEGER PRIMARY KEY, user_id INTEGER, cislo INTEGER, cislo_full TEXT, klient_id INTEGER, kategorie_id INTEGER, datum_vystaveni TEXT, datum_duzp TEXT, datum_splatnosti TEXT, castka_celkem REAL, zpusob_uhrady TEXT, variabilni_symbol TEXT, cislo_objednavky TEXT, uvodni_text TEXT, uhrazeno INTEGER DEFAULT 0, muj_popis TEXT)''')
     try: c.execute("ALTER TABLE faktury ADD COLUMN cislo_full TEXT")
     except: pass
+    
     c.execute('''CREATE TABLE IF NOT EXISTS faktura_polozky (id INTEGER PRIMARY KEY, faktura_id INTEGER, nazev TEXT, cena REAL)''')
     c.execute('''CREATE TABLE IF NOT EXISTS licencni_klice (id INTEGER PRIMARY KEY, kod TEXT UNIQUE, dny_platnosti INTEGER, vygenerovano TEXT, pouzito_uzivatelem_id INTEGER, poznamka TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS email_templates (id INTEGER PRIMARY KEY, name TEXT UNIQUE, subject TEXT, body TEXT)''')
@@ -176,14 +180,21 @@ def process_logo(uploaded_file):
         img_byte_arr = io.BytesIO(); image.save(img_byte_arr, format='PNG'); return img_byte_arr.getvalue()
     except: return None
 
+# --- E-MAILY (UPRAVENO: DISPLAY NAME) ---
 def send_email_custom(to_email, subject, body):
     if not SYSTEM_EMAIL["enabled"] or not SYSTEM_EMAIL["password"]: return False
     try:
-        msg = MIMEMultipart(); msg['From'] = SYSTEM_EMAIL["email"]; msg['To'] = to_email; msg['Subject'] = subject
+        msg = MIMEMultipart()
+        # Použití jména odesílatele "MojeFakturace"
+        msg['From'] = formataddr((SYSTEM_EMAIL["display_name"], SYSTEM_EMAIL["email"]))
+        msg['To'] = to_email
+        msg['Subject'] = subject
         msg.attach(MIMEText(body, 'plain'))
+        
         server = smtplib.SMTP_SSL(SYSTEM_EMAIL["server"], SYSTEM_EMAIL["port"])
         server.login(SYSTEM_EMAIL["email"], SYSTEM_EMAIL["password"])
-        server.sendmail(SYSTEM_EMAIL["email"], to_email, msg.as_string()); server.quit()
+        server.sendmail(SYSTEM_EMAIL["email"], to_email, msg.as_string())
+        server.quit()
         return True
     except: return False
 
@@ -196,12 +207,17 @@ def send_welcome_email_db(to_email, full_name):
         return send_email_custom(to_email, subj, body)
     except: return False
 
-# --- OPRAVENÝ PDF GENERATOR (SAFE MODE) ---
+# --- PDF GENERATOR (SAFE MODE) ---
 def generate_pdf(faktura_id, uid, is_pro):
     import qrcode
     
+    # Helper pro bezpečný text (odstranění diakritiky pro standardní fonty)
+    def safe_txt(text):
+        return remove_accents(str(text)) if text else ""
+
     class PDF(FPDF):
         def header(self):
+            # Použijeme standardní Arial/Helvetica, která je v PDF vždy
             self.set_font('Arial', 'B', 24)
             self.set_text_color(50, 50, 50)
             self.cell(0, 10, 'FAKTURA', 0, 1, 'R')
@@ -210,7 +226,7 @@ def generate_pdf(faktura_id, uid, is_pro):
     try:
         # Načtení dat
         data = run_query("SELECT f.*, k.jmeno as k_jmeno, k.adresa as k_adresa, k.ico as k_ico, k.dic as k_dic, kat.barva, kat.logo_blob, kat.prefix FROM faktury f JOIN klienti k ON f.klient_id=k.id JOIN kategorie kat ON f.kategorie_id=kat.id WHERE f.id=? AND f.user_id=?", (faktura_id, uid), single=True)
-        if not data: return b"ERROR_DATA_NOT_FOUND"
+        if not data: return None # Vrať None, Streamlit pak nezobrazí tlačítko
         
         polozky = run_query("SELECT * FROM faktura_polozky WHERE faktura_id=?", (faktura_id,))
         moje = run_query("SELECT * FROM nastaveni WHERE user_id=? LIMIT 1", (uid,), single=True) or {}
@@ -238,10 +254,6 @@ def generate_pdf(faktura_id, uid, is_pro):
 
         # Číslo faktury
         cislo_f = data['cislo_full'] if data['cislo_full'] else f"{data['prefix']}{data['cislo']}"
-
-        # Helper pro bezpečný text (odstranění diakritiky pro standardní fonty)
-        def safe_txt(text):
-            return remove_accents(str(text)) if text else ""
 
         pdf.set_text_color(100); pdf.set_y(40)
         pdf.cell(95, 5, "DODAVATEL:", 0, 0); pdf.cell(95, 5, "ODBERATEL:", 0, 1)
@@ -293,10 +305,12 @@ def generate_pdf(faktura_id, uid, is_pro):
                 os.remove("temp_qr.png")
             except: pass
             
-        return pdf.output(dest='S').encode('latin-1', 'ignore') # Bezpečný encode
+        # DŮLEŽITÉ: Převod na latin-1 string pro Streamlit download button
+        return pdf.output(dest='S').encode('latin-1', 'ignore')
+        
     except Exception as e:
-        print(f"PDF ERROR: {e}")
-        return b"ERROR_GEN"
+        print(f"PDF GEN ERROR: {e}")
+        return None
 
 # --- 7. SESSION ---
 if 'user_id' not in st.session_state: st.session_state.user_id = None
@@ -484,7 +498,7 @@ else:
         clients = ["Všichni"] + [c['jmeno'] for c in run_query("SELECT jmeno FROM klienti WHERE user_id=?", (uid,))]
         sel_cli = st.selectbox("Klient", clients)
         
-        # Nový filtr roků
+        # Nový filtr roků - UPRAVENO: Přidána možnost "Všechny roky"
         available_years_q = "SELECT DISTINCT strftime('%Y', datum_vystaveni) FROM faktury WHERE user_id=?"
         available_years_p = [uid]
         if sel_cli != "Všichni":
