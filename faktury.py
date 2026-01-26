@@ -41,7 +41,7 @@ SYSTEM_EMAIL = {
     "display_name": "MojeFakturace"
 }
 
-DB_FILE = 'fakturace_v49_logo.db'
+DB_FILE = 'fakturace_v47_final.db' # Používáme stejnou DB
 FONT_FILE = 'arial.ttf' 
 
 # --- 1. DESIGN ---
@@ -174,11 +174,15 @@ def send_email_custom(to, sub, body):
 
 def send_welcome_email_db(to, name):
     tpl = run_query("SELECT subject, body FROM email_templates WHERE name='welcome'", single=True)
-    # Default text pokud DB selže (pojistka)
+    # Použití dict() pro bezpečný přístup v případě, že je tpl Row
+    tpl_dict = dict(tpl) if tpl else {}
+    
+    # Defaultní hodnoty, pokud šablona neexistuje nebo je prázdná
     s_def = "Vítejte ve vašem fakturačním systému"
     b_def = f"Dobrý den {name},\n\nVáš účet byl úspěšně vytvořen.\n\nS pozdravem,\nTým MojeFakturace"
     
-    s, b = (tpl['subject'], tpl['body'].replace("{name}", name)) if tpl else (s_def, b_def)
+    s = tpl_dict.get('subject', s_def)
+    b = tpl_dict.get('body', b_def).replace("{name}", name)
     return send_email_custom(to, s, b)
 
 def get_export_data(user_id):
@@ -196,7 +200,7 @@ def get_export_data(user_id):
     finally: conn.close()
     return json.dumps(export_data, default=str)
 
-# --- PDF GENERACE (S VĚTŠÍM LOGEM) ---
+# --- PDF GENERACE (S OPRAVENÝM QR KÓDEM) ---
 def generate_pdf(faktura_id, uid, is_pro):
     use_font = os.path.exists(FONT_FILE)
     
@@ -239,12 +243,12 @@ def generate_pdf(faktura_id, uid, is_pro):
         if use_font: pdf.set_font('ArialCS', '', 10)
         else: pdf.set_font('Arial', '', 10)
 
-        # Logo - ZVĚTŠENO NA 50mm
+        # Logo
         if data.get('logo_blob'):
             try:
                 fn = f"l_{faktura_id}.png"
                 with open(fn, "wb") as f: f.write(data['logo_blob'])
-                pdf.image(fn, 10, 10, 50) # Zvětšeno na 50
+                pdf.image(fn, 10, 10, 30)
                 os.remove(fn)
             except: pass 
 
@@ -254,9 +258,7 @@ def generate_pdf(faktura_id, uid, is_pro):
             try: c = data['barva'].lstrip('#'); r, g, b = tuple(int(c[i:i+2], 16) for i in (0, 2, 4))
             except: pass
 
-        pdf.set_text_color(100)
-        # POSUNUTO NÍŽE NA Y=55 (původně 40), aby se vešlo logo
-        pdf.set_y(55) 
+        pdf.set_text_color(100); pdf.set_y(40)
         pdf.cell(95, 5, "DODAVATEL:", 0, 0); pdf.cell(95, 5, "ODBĚRATEL:", 0, 1); pdf.set_text_color(0)
         y = pdf.get_y()
         
@@ -313,9 +315,15 @@ def generate_pdf(faktura_id, uid, is_pro):
         if is_pro and moje.get('iban'):
             try:
                 ic = str(moje['iban']).replace(" ", "").upper()
-                qr = f"SPD*1.0*ACC:{ic}*AM:{data.get('castka_celkem')}*CC:CZK*MSG:{cislo_f}"
+                vs_code = str(data.get('variabilni_symbol', ''))
+                # Odstranění diakritiky z msg pro QR
+                msg_val = remove_accents(f"Za sluzby faktura {cislo_f}")
+                
+                qr = f"SPD*1.0*ACC:{ic}*AM:{data.get('castka_celkem')}*CC:CZK*X-VS:{vs_code}*MSG:{msg_val}"
                 q = qrcode.make(qr); fn_q = f"q_{faktura_id}.png"; q.save(fn_q)
-                pdf.image(fn_q, 10, pdf.get_y()+2, 30) # Posunuto pod text
+                
+                # Posunuto dolů pod text (+2)
+                pdf.image(fn_q, 10, pdf.get_y() + 2, 30)
                 os.remove(fn_q)
             except: pass
             
