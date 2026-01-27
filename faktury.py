@@ -24,25 +24,19 @@ from PIL import Image
 from fpdf import FPDF
 import qrcode
 
-# --- 0. KONFIGURACE ---
-try:
-    email_pass = st.secrets["EMAIL_PASSWORD"]
-except:
-    email_pass = os.getenv("EMAIL_PASSWORD", "")
-
-# --- 0. KONFIGURACE ---
+# --- 0. KONFIGURACE (BEZPEČNOSTNÍ OPRAVA) ---
 try:
     # 1. Zkusíme načíst heslo ze secrets.toml
     admin_pass_init = st.secrets["ADMIN_INIT_PASS"]
     email_pass = st.secrets.get("EMAIL_PASSWORD", "")
 except Exception:
-    # 2. Pokud selže (např. lokálně bez souboru), zkusíme proměnné prostředí, ale BEZ fallbacku "admin"
+    # 2. Pokud selže, zkusíme proměnné prostředí (ale bez fallbacku "admin"!)
     admin_pass_init = os.getenv("ADMIN_INIT_PASS")
     email_pass = os.getenv("EMAIL_PASSWORD", "")
 
-# 3. Pokud heslo stále nemáme, zastavíme aplikaci (BEZPEČNOST)
+# 3. Pokud heslo stále nemáme, zastavíme aplikaci (ŽÁDNÁ ZADNÍ VRÁTKA)
 if not admin_pass_init:
-    st.error("⛔ CHYBA: Není nastaveno heslo ADMIN_INIT_PASS v .streamlit/secrets.toml!")
+    st.error("⛔ CHYBA BEZPEČNOSTI: Není nastaveno heslo ADMIN_INIT_PASS v secrets.toml!")
     st.stop()
 
 SYSTEM_EMAIL = {
@@ -58,7 +52,7 @@ DB_FILE = 'fakturace_v47_final.db'
 FONT_FILE = 'arial.ttf' 
 
 # --- 1. DESIGN ---
-st.set_page_config(page_title="Fakturace Pro v5.7", page_icon="💎", layout="wide")
+st.set_page_config(page_title="Fakturace Pro v5.8", page_icon="💎", layout="wide")
 
 st.markdown("""
     <style>
@@ -141,10 +135,19 @@ def init_db():
 
     try: c.execute("INSERT OR IGNORE INTO email_templates (name, subject, body) VALUES ('welcome', 'Vítejte ve vašem fakturačním systému', 'Dobrý den {name},\n\nVáš účet byl úspěšně vytvořen.\n\nS pozdravem,\nTým MojeFakturace')")
     except: pass
+    
+    # --- OPRAVA: SYNCHRONIZACE HESLA ADMINA ---
     try:
         adm_hash = hashlib.sha256(str.encode(admin_pass_init)).hexdigest()
-        c.execute("INSERT OR IGNORE INTO users (username, password_hash, role, full_name, email, phone, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)", ("admin", adm_hash, "admin", "Super Admin", "admin@system.cz", "000000000", datetime.now().isoformat()))
-    except: pass
+        # Použijeme ON CONFLICT pro aktualizaci hesla, pokud uživatel 'admin' už existuje
+        c.execute("""
+            INSERT INTO users (username, password_hash, role, full_name, email, phone, created_at) 
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(username) DO UPDATE SET password_hash=excluded.password_hash
+        """, ("admin", adm_hash, "admin", "Super Admin", "admin@system.cz", "000000000", datetime.now().isoformat()))
+    except Exception as e: 
+        print(f"Chyba admin sync: {e}")
+    
     conn.commit(); conn.close()
 
 if 'db_inited' not in st.session_state:
@@ -171,79 +174,29 @@ def get_next_invoice_number(kat_id, uid):
     if res: return (res['aktualni_cislo'], f"{res['prefix']}{res['aktualni_cislo']}", res['prefix'])
     return (1, "1", "")
 
-# --- IMPLEMENTACE VAŠEHO ARES KÓDU ---
 def get_ares_data(ico):
-    """
-    Načte data z ARES podle IČO
-    """
-    import urllib3
-    urllib3.disable_warnings()
-    
-    if not ico:
-        return None
-    
-    # Očištění a formátování IČO na 8 číslic
+    import urllib3; urllib3.disable_warnings()
+    if not ico: return None
     ico = "".join(filter(str.isdigit, str(ico))).zfill(8)
-    
-    # Správná URL ARES API
     url = f"https://ares.gov.cz/ekonomicke-subjekty-v-be/rest/ekonomicke-subjekty/{ico}"
-    headers = {
-        "accept": "application/json",
-        "User-Agent": "Mozilla/5.0"
-    }
-    
+    headers = {"accept": "application/json", "User-Agent": "Mozilla/5.0"}
     try:
         r = requests.get(url, headers=headers, verify=False, timeout=5)
-        
         if r.status_code == 200:
-            data = r.json()
-            
-            # Zpracování sídla
-            sidlo = data.get('sidlo', {})
-            ulice = sidlo.get('nazevUlice', '')
-            cislo_dom = sidlo.get('cisloDomovni')
-            cislo_or = sidlo.get('cisloOrientacni')
-            obec = sidlo.get('nazevObce', '')
-            psc = sidlo.get('psc', '')
-            
-            # Sestavení čísla domu
-            cislo_txt = str(cislo_dom) if cislo_dom else ""
-            if cislo_or:
-                cislo_txt += f"/{cislo_or}"
-            
-            # Sestavení adresy
+            data = r.json(); sidlo = data.get('sidlo', {})
+            ulice = sidlo.get('nazevUlice', ''); cislo_dom = sidlo.get('cisloDomovni'); cislo_or = sidlo.get('cisloOrientacni'); obec = sidlo.get('nazevObce', ''); psc = sidlo.get('psc', '')
+            cislo_txt = str(cislo_dom) if cislo_dom else ""; 
+            if cislo_or: cislo_txt += f"/{cislo_or}"
             adr_parts = []
-            if ulice:
-                adr_parts.append(f"{ulice} {cislo_txt}".strip())
-            elif cislo_txt and obec:
-                adr_parts.append(f"{obec} {cislo_txt}")
-            
-            if psc and obec:
-                adr_parts.append(f"{psc} {obec}")
-            
+            if ulice: adr_parts.append(f"{ulice} {cislo_txt}".strip())
+            elif cislo_txt and obec: adr_parts.append(f"{obec} {cislo_txt}")
+            if psc and obec: adr_parts.append(f"{psc} {obec}")
             plna_adresa = ", ".join(adr_parts)
-            
-            # Fallback na textovou adresu z API
-            if not plna_adresa:
-                plna_adresa = sidlo.get('textovaAdresa', '')
-            
-            # DIČ může být v různých formátech
+            if not plna_adresa: plna_adresa = sidlo.get('textovaAdresa', '')
             dic = data.get('dic', '')
-            if not dic:
-                dic = data.get('dicId', '')
-            
-            return {
-                "jmeno": data.get('obchodniJmeno', ''),
-                "adresa": plna_adresa,
-                "ico": ico,
-                "dic": dic
-            }
-        else:
-            print(f"ARES HTTP Error: {r.status_code}")
-            
-    except Exception as e:
-        print(f"ARES Error: {e}")
-    
+            if not dic: dic = data.get('dicId', '')
+            return {"jmeno": data.get('obchodniJmeno', ''), "adresa": plna_adresa, "ico": ico, "dic": dic}
+    except Exception as e: print(f"ARES Error: {e}")
     return None
 
 def process_logo(uploaded_file):
@@ -453,39 +406,70 @@ if st.sidebar.button("Odhlásit"): st.session_state.user_id=None; st.rerun()
 
 # ADMIN
 if role == 'admin':
-    st.header("👑 Admin Sekce")
-    tabs = st.tabs(["Uživatelé", "Licence", "Statistiky", "📧 E-mailing"])
-    with tabs[0]:
-        for u in run_query("SELECT * FROM users WHERE role!='admin' ORDER BY id DESC"):
-            with st.expander(f"{u['username']} ({u['email']})"):
-                st.markdown(f"**Tel:** {u['phone']} | **Aktivní:** {format_date(u['last_active'])}")
-                ld = u['license_valid_until']; val_date = datetime.strptime(str(ld)[:10], '%Y-%m-%d').date() if ld else date.today()
-                if ld: st.info(f"Licence do: {format_date(ld)}")
-                else: st.warning("Bez licence")
-                fk = run_query("SELECT * FROM licencni_klice WHERE pouzito_uzivatelem_id IS NULL ORDER BY id DESC")
-                key_dict = {f"{k['kod']} ({k['dny_platnosti']} dní) - {k['poznamka']}": k for k in fk}
-                sel_key_key = st.selectbox("Přiřadit licenci", ["-- Vyberte klíč --"] + list(key_dict.keys()), key=f"sel_{u['id']}")
-                if st.button("Aktivovat vybranou licenci", key=f"btn_{u['id']}"):
-                    if sel_key_key != "-- Vyberte klíč --":
-                        k_data = key_dict[sel_key_key]; new_exp = date.today() + timedelta(days=k_data['dny_platnosti'])
-                        run_command("UPDATE users SET license_key=?, license_valid_until=? WHERE id=?", (k_data['kod'], new_exp, u['id'])); run_command("UPDATE licencni_klice SET pouzito_uzivatelem_id=? WHERE id=?", (u['id'], k_data['id'])); st.success("Licence aktivována!"); st.rerun()
-                if st.button("Smazat uživatele", key=f"del_{u['id']}", type="primary"): run_command("DELETE FROM users WHERE id=?",(u['id'],)); st.rerun()
-    with tabs[1]:
-        days_val = st.number_input("Platnost (dny)", value=365, min_value=1); note_val = st.text_input("Poznámka (např. jméno firmy)")
-        if st.button("Vygenerovat nový klíč"):
+    st.header("👑 Admin Dashboard")
+    # Statistiky (nepočítat admina)
+    u_count = run_query("SELECT COUNT(*) FROM users WHERE role!='admin'", single=True)[0] or 0
+    f_count = run_query("SELECT COUNT(*) FROM faktury", single=True)[0] or 0
+    t_rev = run_query("SELECT SUM(castka_celkem) FROM faktury", single=True)[0] or 0
+    
+    avg_u = t_rev / u_count if u_count > 0 else 0
+    avg_f = t_rev / f_count if f_count > 0 else 0
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Počet uživatelů", u_count)
+    c2.metric("Celkový obrat", f"{t_rev:,.0f} Kč")
+    c3.metric("Obrat / Uživatel", f"{avg_u:,.0f} Kč")
+    c4.metric("Průměrná faktura", f"{avg_f:,.0f} Kč")
+    
+    st.divider()
+    st.subheader("📋 Seznam uživatelů")
+    
+    # Komplexní dotaz pro tabulku
+    users_df = pd.read_sql("""
+        SELECT u.id, u.username, u.full_name, u.email, u.phone, u.created_at, u.last_active, 
+               u.license_valid_until,
+               (SELECT COUNT(*) FROM faktury WHERE user_id = u.id) as faktur,
+               (SELECT SUM(castka_celkem) FROM faktury WHERE user_id = u.id) as obrat
+        FROM users u 
+        WHERE u.role != 'admin'
+        ORDER BY u.id DESC
+    """, get_db())
+    
+    if not users_df.empty:
+        st.dataframe(users_df, use_container_width=True)
+    else:
+        st.info("Žádní uživatelé.")
+
+    st.subheader("🔑 Správa Licencí & Akce")
+    for u in run_query("SELECT * FROM users WHERE role!='admin' ORDER BY id DESC"):
+        with st.expander(f"{u['username']} ({u['email']})"):
+            c1, c2 = st.columns(2)
+            c1.write(f"**Tel:** {u['phone']}")
+            c1.write(f"**Vytvořeno:** {format_date(u['created_at'])}")
+            
+            # Licence logic
+            fk = run_query("SELECT * FROM licencni_klice WHERE pouzito_uzivatelem_id IS NULL ORDER BY id DESC")
+            key_dict = {f"{k['kod']} ({k['dny_platnosti']} dní)": k for k in fk}
+            sel_key = c2.selectbox("Přiřadit klíč", ["-- Vyberte --"] + list(key_dict.keys()), key=f"sk_{u['id']}")
+            
+            if c2.button("Aktivovat", key=f"btn_{u['id']}"):
+                if sel_key != "-- Vyberte --":
+                    k_data = key_dict[sel_key]
+                    new_exp = date.today() + timedelta(days=k_data['dny_platnosti'])
+                    run_command("UPDATE users SET license_key=?, license_valid_until=? WHERE id=?", (k_data['kod'], new_exp, u['id']))
+                    run_command("UPDATE licencni_klice SET pouzito_uzivatelem_id=? WHERE id=?", (u['id'], k_data['id']))
+                    st.success("OK"); st.rerun()
+            
+            if st.button("🗑️ Smazat uživatele", key=f"del_{u['id']}", type="primary"):
+                run_command("DELETE FROM users WHERE id=?",(u['id'],)); st.rerun()
+
+    st.divider()
+    with st.expander("🛠️ Generátor klíčů"):
+        days = st.number_input("Dny platnosti", 365); note = st.text_input("Poznámka")
+        if st.button("Vygenerovat klíč"):
             k = generate_license_key()
-            run_command("INSERT INTO licencni_klice (kod, dny_platnosti, vygenerovano, poznamka) VALUES (?,?,?,?)", (k, days_val, datetime.now().isoformat(), note_val)); st.success(f"Vytvořeno: {k}")
-        for k in run_query("SELECT * FROM licencni_klice ORDER BY id DESC"): st.code(f"{k['kod']} | {k['dny_platnosti']} dní | {'🔴 Použit' if k['pouzito_uzivatelem_id'] else '🟢 Volný'} | {k['poznamka']}")
-    with tabs[3]:
-        tpl = run_query("SELECT * FROM email_templates WHERE name='welcome'", single=True); tpl_dict = dict(tpl) if tpl else {}
-        with st.form("wm"):
-            ws = st.text_input("Předmět", value=tpl_dict.get('subject', '')); wb = st.text_area("Text", value=tpl_dict.get('body', ''))
-            if st.form_submit_button("Uložit"): run_command("INSERT OR REPLACE INTO email_templates (id, name, subject, body) VALUES ((SELECT id FROM email_templates WHERE name='welcome'), 'welcome', ?, ?)", (ws, wb)); st.success("OK")
-        with st.form("mm"):
-            ms = st.text_input("Předmět"); mb = st.text_area("Zpráva")
-            if st.form_submit_button("Odeslat všem"):
-                for u in run_query("SELECT email FROM users WHERE role!='admin' AND email IS NOT NULL"): send_email_custom(u['email'], ms, mb)
-                st.success("Odesláno")
+            run_command("INSERT INTO licencni_klice (kod, dny_platnosti, vygenerovano, poznamka) VALUES (?,?,?,?)", (k, days, datetime.now().isoformat(), note))
+            st.success(f"Klíč: {k}")
 
 # USER
 else:
