@@ -24,17 +24,14 @@ from PIL import Image
 from fpdf import FPDF
 import qrcode
 
-# --- 0. KONFIGURACE (BEZPEČNOSTNÍ OPRAVA) ---
+# --- 0. KONFIGURACE ---
 try:
-    # 1. Zkusíme načíst heslo ze secrets.toml
     admin_pass_init = st.secrets["ADMIN_INIT_PASS"]
     email_pass = st.secrets.get("EMAIL_PASSWORD", "")
 except Exception:
-    # 2. Pokud selže, zkusíme proměnné prostředí (ale bez fallbacku "admin"!)
     admin_pass_init = os.getenv("ADMIN_INIT_PASS")
     email_pass = os.getenv("EMAIL_PASSWORD", "")
 
-# 3. Pokud heslo stále nemáme, zastavíme aplikaci
 if not admin_pass_init:
     st.error("⛔ CHYBA BEZPEČNOSTI: Není nastaveno heslo ADMIN_INIT_PASS v secrets.toml!")
     st.stop()
@@ -51,16 +48,20 @@ SYSTEM_EMAIL = {
 DB_FILE = 'fakturace_v47_final.db' 
 FONT_FILE = 'arial.ttf' 
 
-# --- 1. DESIGN ---
-st.set_page_config(page_title="Fakturace Pro v5.10", page_icon="💎", layout="wide")
+# --- 1. DESIGN (UPRAVENO NA CENTERED PRO PC) ---
+st.set_page_config(page_title="Fakturace Pro v6.0", page_icon="💎", layout="centered")
 
 st.markdown("""
     <style>
+    /* 1. Hlavní pozadí a text */
     .stApp { background-color: #0f172a !important; color: #f8fafc !important; font-family: sans-serif; }
+    
+    /* 2. Vstupy */
     .stTextInput input, .stNumberInput input, .stTextArea textarea, .stDateInput input, .stSelectbox div[data-baseweb="select"] {
-        background-color: #1e293b !important; border: 1px solid #334155 !important; color: #fff !important;
-        border-radius: 12px !important; padding: 12px !important;
+        background-color: #1e293b !important; border: 1px solid #334155 !important; color: #fff !important; border-radius: 12px !important; padding: 12px !important;
     }
+    
+    /* 3. SIDEBAR */
     section[data-testid="stSidebar"] { background-color: #0f172a !important; }
     section[data-testid="stSidebar"] div, section[data-testid="stSidebar"] label, section[data-testid="stSidebar"] span, section[data-testid="stSidebar"] p { color: #f8fafc !important; }
     
@@ -73,12 +74,15 @@ st.markdown("""
     section[data-testid="stSidebar"] .stRadio label[data-checked="true"] {
         background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%) !important; color: #0f172a !important; border: none !important; font-weight: 800 !important;
     }
+
+    /* 4. TLAČÍTKA */
     .stButton > button, [data-testid="stDownloadButton"] > button {
         background-color: #334155 !important; color: #ffffff !important; border-radius: 10px !important; height: 50px; font-weight: 600; border: 1px solid #475569 !important; width: 100%;
     }
     .stButton > button:hover, [data-testid="stDownloadButton"] > button:hover { border-color: #fbbf24 !important; color: #fbbf24 !important; }
     div[data-testid="stForm"] button[kind="primary"] { background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%) !important; color: #0f172a !important; border: none !important; }
-    
+
+    /* 5. STATISTICKÉ BOXY */
     .stat-container { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; justify-content: space-between; }
     .stat-box { background: #1e293b; border-radius: 12px; padding: 15px; flex: 1; min-width: 140px; text-align: center; border: 1px solid #334155; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
     .mini-stat-box { background: #334155; border-radius: 8px; padding: 10px; flex: 1; min-width: 100px; text-align: center; border: 1px solid #475569; margin-bottom: 5px; }
@@ -87,11 +91,18 @@ st.markdown("""
         .stat-box, .mini-stat-box { min-width: 100% !important; margin-bottom: 10px; }
         .stat-container { flex-direction: column; }
     }
+
     .stat-label { font-size: 11px; text-transform: uppercase; color: #94a3b8; margin-bottom: 5px; font-weight: 700; }
     .stat-value { font-size: 20px; font-weight: 800; color: #fff; }
     .mini-value { font-size: 16px; font-weight: 700; color: #e2e8f0; }
     .text-green { color: #34d399 !important; } .text-red { color: #f87171 !important; } .text-gold { color: #fbbf24 !important; }
     div[data-testid="stExpander"] { background-color: #1e293b !important; border: 1px solid #334155 !important; border-radius: 12px !important; }
+    
+    /* DAŇOVÝ BOX */
+    .tax-box { background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border: 1px solid #fbbf24; border-radius: 15px; padding: 20px; margin-bottom: 20px; text-align: center; }
+    .tax-title { color: #94a3b8; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+    .tax-amount { color: #fbbf24; font-size: 32px; font-weight: 800; margin-bottom: 5px; }
+    .tax-desc { color: #cbd5e1; font-size: 14px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -128,16 +139,11 @@ def init_db():
     try: c.execute("INSERT OR IGNORE INTO email_templates (name, subject, body) VALUES ('welcome', 'Vítejte ve vašem fakturačním systému', 'Dobrý den {name},\n\nVáš účet byl úspěšně vytvořen.\n\nS pozdravem,\nTým MojeFakturace')")
     except: pass
     
-    # --- OPRAVA: SYNCHRONIZACE HESLA ADMINA (NUCENÁ AKTUALIZACE) ---
     try:
         adm_hash = hashlib.sha256(str.encode(admin_pass_init)).hexdigest()
-        # Vložení admina, pokud neexistuje
         c.execute("INSERT OR IGNORE INTO users (username, password_hash, role, full_name, email, phone, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)", ("admin", adm_hash, "admin", "Super Admin", "admin@system.cz", "000000000", datetime.now().isoformat()))
-        # VYNUCENÁ aktualizace hesla podle secrets.toml
         c.execute("UPDATE users SET password_hash=? WHERE username='admin'", (adm_hash,))
-    except Exception as e: 
-        print(f"Chyba admin sync: {e}")
-    
+    except Exception as e: print(f"Chyba admin sync: {e}")
     conn.commit(); conn.close()
 
 if 'db_inited' not in st.session_state:
@@ -428,7 +434,6 @@ if role == 'admin':
                     if dobj >= date.today(): is_active_lic = True
                 except: pass
             
-            # --- OPRAVA CHYBY S HTML V EXPANDERU (Použití Emoji místo HTML) ---
             status_badge = "⭐ PRO" if is_active_lic else "🆓 FREE"
             
             with st.expander(f"{u['username']} ({u['email']}) | {status_badge}"):
@@ -491,7 +496,7 @@ if role == 'admin':
 
 # USER
 else:
-    menu = st.sidebar.radio(" ", ["📊 Faktury", "💸 Výdaje", "👥 Klienti", "🏷️ Kategorie", "⚙️ Nastavení"])
+    menu = st.sidebar.radio(" ", ["📊 Faktury", "🏛️ Daně", "💸 Výdaje", "👥 Klienti", "🏷️ Kategorie", "⚙️ Nastavení"])
     
     if "Faktury" in menu:
         t1, t2 = st.tabs(["Přehled & Seznam", "📈 Dashboard"])
@@ -618,6 +623,61 @@ else:
             st.subheader("🍰 Příjmy dle kategorií")
             df_c = pd.read_sql("SELECT k.nazev, SUM(f.castka_celkem) as celkem FROM faktury f JOIN kategorie k ON f.kategorie_id=k.id WHERE f.user_id=? GROUP BY k.nazev", get_db(), params=(uid,))
             if not df_c.empty: st.bar_chart(df_c.set_index('nazev'))
+
+    elif "🏛️ Daně" in menu:
+        st.header("🏛️ Daňová kalkulačka (Orientační)")
+        
+        # 1. Výběr roku
+        years = [r[0] for r in run_query("SELECT DISTINCT strftime('%Y', datum_vystaveni) FROM faktury WHERE user_id=?", (uid,))]
+        current_year = str(date.today().year)
+        if current_year not in years: years.append(current_year)
+        sel_tax_year = st.selectbox("Vyberte rok", sorted(list(set(years)), reverse=True))
+        
+        # 2. Načtení dat
+        income = run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=? AND strftime('%Y', datum_vystaveni)=?", (uid, sel_tax_year), True)[0] or 0
+        real_expenses = run_query("SELECT SUM(castka) FROM vydaje WHERE user_id=? AND strftime('%Y', datum)=?", (uid, sel_tax_year), True)[0] or 0
+        
+        # 3. Výpočty
+        flat_expenses = income * 0.6
+        
+        tax_base_real = max(0, income - real_expenses)
+        tax_base_flat = max(0, income - flat_expenses)
+        
+        tax_real = tax_base_real * 0.15
+        tax_flat = tax_base_flat * 0.15
+        
+        diff = tax_flat - tax_real
+        
+        # 4. Zobrazení
+        st.markdown(f"### 💰 Příjmy za rok {sel_tax_year}: **{income:,.0f} Kč**")
+        
+        c1, c2 = st.columns(2)
+        
+        with c1:
+            st.markdown("<div class='stat-box'><h4>A) SKUTEČNÉ VÝDAJE</h4>", unsafe_allow_html=True)
+            st.write(f"Výdaje: {real_expenses:,.0f} Kč")
+            st.write(f"Základ daně: {tax_base_real:,.0f} Kč")
+            st.markdown(f"<h2 style='color:#fbbf24'>{tax_real:,.0f} Kč</h2>", unsafe_allow_html=True)
+            st.write("Daň (15%)")
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+        with c2:
+            st.markdown("<div class='stat-box'><h4>B) PAUŠÁL 60%</h4>", unsafe_allow_html=True)
+            st.write(f"Výdaje (60%): {flat_expenses:,.0f} Kč")
+            st.write(f"Základ daně: {tax_base_flat:,.0f} Kč")
+            st.markdown(f"<h2 style='color:#fbbf24'>{tax_flat:,.0f} Kč</h2>", unsafe_allow_html=True)
+            st.write("Daň (15%)")
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+        st.divider()
+        
+        # 5. Vyhodnocení
+        if tax_real < tax_flat:
+            st.success(f"🏆 VÝHODNĚJŠÍ JSOU SKUTEČNÉ VÝDAJE! Ušetříte {diff:,.0f} Kč.")
+        elif tax_flat < tax_real:
+            st.success(f"🏆 VÝHODNĚJŠÍ JE PAUŠÁL! Ušetříte {abs(diff):,.0f} Kč.")
+        else:
+            st.info("Obě varianty vychází stejně.")
 
     elif "Výdaje" in menu:
         st.header("💸 Evidence výdajů")
