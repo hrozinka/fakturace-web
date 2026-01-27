@@ -48,8 +48,8 @@ SYSTEM_EMAIL = {
 DB_FILE = 'fakturace_v47_final.db' 
 FONT_FILE = 'arial.ttf' 
 
-# --- 1. DESIGN (MODERNÍ + FIX PRO MOBILY A DROPDOWNY) ---
-st.set_page_config(page_title="MojeFaktury", page_icon="💎", layout="centered")
+# --- 1. DESIGN ---
+st.set_page_config(page_title="MojeFaktury v6.2", page_icon="💎", layout="centered")
 
 st.markdown("""
     <style>
@@ -73,55 +73,36 @@ st.markdown("""
         padding: 12px !important;
     }
 
-    /* --- 3. KRITICKÁ OPRAVA ROLOVACÍCH NABÍDEK (SELECTBOX) --- */
-    
-    /* Kontejner Selectboxu */
+    /* 3. FIX ROLOVACÍCH NABÍDEK (SELECTBOX) */
     .stSelectbox div[data-baseweb="select"] {
         background-color: #1e293b !important;
         border: 1px solid #334155 !important;
         color: #ffffff !important;
         border-radius: 12px !important;
     }
-    
-    /* Samotné vyskakovací okno (Popover/Menu) */
     ul[data-baseweb="menu"] {
-        background-color: #0f172a !important; /* Tmavé pozadí seznamu */
+        background-color: #0f172a !important;
         border: 1px solid #334155 !important;
         padding: 5px !important;
     }
-    
-    /* Jednotlivé položky v seznamu (Nevybrané) */
     li[data-baseweb="option"] {
         background-color: #0f172a !important;
-        color: #ffffff !important; /* Bílý text */
+        color: #ffffff !important;
         padding: 10px !important;
     }
-    
-    /* Text uvnitř položky */
-    li[data-baseweb="option"] div {
-        color: #ffffff !important;
-    }
-
-    /* Vybraná nebo Hover položka */
-    li[data-baseweb="option"][aria-selected="true"],
-    li[data-baseweb="option"]:hover {
-        background-color: #fbbf24 !important; /* Zlatá */
+    li[data-baseweb="option"] div { color: #ffffff !important; }
+    li[data-baseweb="option"][aria-selected="true"], li[data-baseweb="option"]:hover {
+        background-color: #fbbf24 !important;
         cursor: pointer;
     }
-    
-    /* Text uvnitř vybrané položky MUSÍ být černý pro kontrast */
-    li[data-baseweb="option"][aria-selected="true"] div,
-    li[data-baseweb="option"]:hover div {
-        color: #0f172a !important; /* Černá */
+    li[data-baseweb="option"][aria-selected="true"] div, li[data-baseweb="option"]:hover div {
+        color: #0f172a !important;
         font-weight: bold !important;
     }
-
-    /* Ikona šipky v Selectboxu */
     .stSelectbox svg { fill: #ffffff !important; }
 
     /* 4. OSTATNÍ KOMPONENTY */
     ::placeholder { color: #94a3b8 !important; opacity: 1; }
-    
     div[data-baseweb="calendar"] { background-color: #1e293b !important; }
     div[data-baseweb="calendar"] button { color: #fff !important; }
 
@@ -163,6 +144,8 @@ st.markdown("""
     .app-title { font-size: 40px; font-weight: 800; text-align: center; background: -webkit-linear-gradient(45deg, #fbbf24, #d97706); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 10px; }
     .app-desc { text-align: center; color: #94a3b8 !important; font-size: 18px; margin-bottom: 30px; }
     .feature-box { background: #1e293b; padding: 20px; border-radius: 15px; border: 1px solid #334155; margin-bottom: 20px; }
+    
+    .tax-box { background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border: 1px solid #fbbf24; border-radius: 15px; padding: 20px; text-align: center; margin-bottom: 20px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -407,10 +390,8 @@ def reset_forms():
 
 # --- 8. LOGIN & LANDING PAGE ---
 if not st.session_state.user_id:
-    # Hlavní container pro login
     col1, col2, col3 = st.columns([1, 10, 1])
     with col2:
-        # LOGO a NADPIS
         st.markdown("""
             <div class="login-container">
                 <div class="app-logo">💎</div>
@@ -691,11 +672,11 @@ else:
         with c1:
             st.markdown("<div class='tax-box'><h4>A) SKUTEČNÉ VÝDAJE</h4>", unsafe_allow_html=True)
             st.write(f"Výdaje: {real_expenses:,.0f} Kč"); st.write(f"Základ: {tax_base_real:,.0f} Kč")
-            st.markdown(f"<h2 style='color:#fbbf24'>{tax_real:,.0f} Kč</h2>", unsafe_allow_html=True); st.markdown("<p class='tax-desc'>Daň (15%)</p></div>", unsafe_allow_html=True)
+            st.markdown(f"<h2 style='color:#fbbf24'>{tax_real:,.0f} Kč</h2>", unsafe_allow_html=True); st.markdown("<p style='color:#cbd5e1'>Daň (15%)</p></div>", unsafe_allow_html=True)
         with c2:
             st.markdown(f"<div class='tax-box'><h4>B) PAUŠÁL {int(pausal_pct*100)}%</h4>", unsafe_allow_html=True)
             st.write(f"Výdaje: {flat_expenses:,.0f} Kč"); st.write(f"Základ: {tax_base_flat:,.0f} Kč")
-            st.markdown(f"<h2 style='color:#fbbf24'>{tax_flat:,.0f} Kč</h2>", unsafe_allow_html=True); st.markdown("<p class='tax-desc'>Daň (15%)</p></div>", unsafe_allow_html=True)
+            st.markdown(f"<h2 style='color:#fbbf24'>{tax_flat:,.0f} Kč</h2>", unsafe_allow_html=True); st.markdown("<p style='color:#cbd5e1'>Daň (15%)</p></div>", unsafe_allow_html=True)
         st.divider()
         if tax_real < tax_flat: st.success(f"🏆 VÝHODNĚJŠÍ JSOU SKUTEČNÉ VÝDAJE! Ušetříte {diff:,.0f} Kč.")
         elif tax_flat < tax_real: st.success(f"🏆 VÝHODNĚJŠÍ JE PAUŠÁL! Ušetříte {abs(diff):,.0f} Kč.")
@@ -722,6 +703,70 @@ else:
                 if st.button("Smazat označený výdaj"):
                     del_id = int(sel_del.split(":")[0].replace("ID ", ""))
                     run_command("DELETE FROM vydaje WHERE id=? AND user_id=?", (del_id, uid)); st.rerun()
+
+    elif "Klienti" in menu:
+        st.header("Klienti")
+        rid = st.session_state.form_reset_id
+        with st.expander("➕ Přidat"):
+            c1,c2=st.columns([3,1]); ico=c1.text_input("IČO",key=f"a_{rid}")
+            if c2.button("ARES",key=f"b_{rid}"):
+                d=get_ares_data(ico); 
+                if d: st.session_state.ares_data=d; st.success("OK")
+                else: st.error("Nenalezeno")
+            ad = st.session_state.ares_data
+            with st.form("fc"):
+                j=st.text_input("Jméno", ad.get('jmeno','')); a=st.text_area("Adresa", ad.get('adresa',''))
+                i=st.text_input("IČ", ad.get('ico','')); d=st.text_input("DIČ", ad.get('dic','')); p=st.text_area("Poznámka")
+                if st.form_submit_button("Uložit"): run_command("INSERT INTO klienti (user_id, jmeno, adresa, ico, dic, poznamka) VALUES (?,?,?,?,?,?)", (uid,j,a,i,d,p)); reset_forms(); st.rerun()
+        
+        for k in run_query("SELECT * FROM klienti WHERE user_id=?", (uid,)):
+            with st.expander(k['jmeno']):
+                if k['poznamka']: st.info(k['poznamka'])
+                k_edit_key = f"edit_k_{k['id']}"
+                if k_edit_key not in st.session_state: st.session_state[k_edit_key] = False
+                c1,c2 = st.columns(2)
+                if c1.button("✏️ Upravit", key=f"bek_{k['id']}"): st.session_state[k_edit_key] = True; st.rerun()
+                if c2.button("Smazat", key=f"bdk_{k['id']}"): run_command("DELETE FROM klienti WHERE id=?",(k['id'],)); st.rerun()
+                if st.session_state[k_edit_key]:
+                    with st.form(f"fke_{k['id']}"):
+                        nj=st.text_input("Jméno", k['jmeno']); na=st.text_area("Adresa", k['adresa'])
+                        ni=st.text_input("IČ", k['ico']); nd=st.text_input("DIČ", k['dic']); np=st.text_area("Poznámka", k['poznamka'])
+                        if st.form_submit_button("Uložit změny"):
+                            run_command("UPDATE klienti SET jmeno=?, adresa=?, ico=?, dic=?, poznamka=? WHERE id=?", (nj,na,ni,nd,np,k['id']))
+                            st.session_state[k_edit_key] = False; st.rerun()
+
+    elif "Kategorie" in menu:
+        st.header("Kategorie")
+        if not is_pro: st.warning("🔒 Pouze pro PRO verzi.")
+        else:
+            with st.expander("➕ Nová"):
+                with st.form("fcat"):
+                    n=st.text_input("Název"); p=st.text_input("Prefix"); s=st.number_input("Start",1); c=st.color_picker("Barva"); l=st.file_uploader("Logo")
+                    if st.form_submit_button("Uložit"):
+                        blob = process_logo(l)
+                        run_command("INSERT INTO kategorie (user_id, nazev, prefix, aktualni_cislo, barva, logo_blob) VALUES (?,?,?,?,?,?)", (uid,n,p,s,c,blob)); st.rerun()
+        for k in run_query("SELECT * FROM kategorie WHERE user_id=?", (uid,)):
+            with st.expander(k['nazev']):
+                if k['logo_blob']: st.image(k['logo_blob'], width=100)
+                cat_edit_key = f"edit_cat_{k['id']}"
+                if cat_edit_key not in st.session_state: st.session_state[cat_edit_key] = False
+                c1,c2 = st.columns(2)
+                if is_pro:
+                    if c1.button("✏️ Upravit", key=f"bec_{k['id']}"): st.session_state[cat_edit_key] = True; st.rerun()
+                if c2.button("Smazat", key=f"bdc_{k['id']}"): run_command("DELETE FROM kategorie WHERE id=?", (k['id'],)); st.rerun()
+                
+                if st.session_state[cat_edit_key]:
+                    with st.form(f"feck_{k['id']}"):
+                        nn=st.text_input("Název", k['nazev']); np=st.text_input("Prefix", k['prefix'])
+                        ns=st.number_input("Číslo", value=k['aktualni_cislo']); nc=st.color_picker("Barva", k['barva'])
+                        nl = st.file_uploader("Nové logo (pokud chcete změnit)", key=f"ul_{k['id']}")
+                        if st.form_submit_button("Uložit změny"):
+                            if nl:
+                                blob = process_logo(nl)
+                                run_command("UPDATE kategorie SET nazev=?, prefix=?, aktualni_cislo=?, barva=?, logo_blob=? WHERE id=?", (nn,np,ns,nc,blob,k['id']))
+                            else:
+                                run_command("UPDATE kategorie SET nazev=?, prefix=?, aktualni_cislo=?, barva=? WHERE id=?", (nn,np,ns,nc,k['id']))
+                            st.session_state[cat_edit_key] = False; st.rerun()
 
     elif "Nastavení" in menu:
         st.header("Nastavení")
@@ -808,8 +853,34 @@ else:
                      else: st.error("Chyba")
                 upl = st.file_uploader("Import JSON", type="json")
                 if upl and st.button("Obnovit"):
-                    d = json.load(upl)
-                    # (Zde by byl kód pro import, pro stručnost zkráceno, je stejný jako minule)
-                    st.success("Import hotov")
+                    try:
+                        d = json.load(upl); client_map = {}; cat_map = {}
+                        for r in d.get('nastaveni', []):
+                            exist = run_query("SELECT id FROM nastaveni WHERE user_id=?", (uid,), True)
+                            if exist: run_command("UPDATE nastaveni SET nazev=?, adresa=?, ico=?, dic=?, ucet=?, banka=?, email=?, telefon=?, iban=? WHERE id=?", (r.get('nazev'), r.get('adresa'), r.get('ico'), r.get('dic'), r.get('ucet'), r.get('banka'), r.get('email'), r.get('telefon'), r.get('iban'), exist['id']))
+                            else: run_command("INSERT INTO nastaveni (user_id, nazev, adresa, ico, dic, ucet, banka, email, telefon, iban) VALUES (?,?,?,?,?,?,?,?,?,?)", (uid, r.get('nazev'), r.get('adresa'), r.get('ico'), r.get('dic'), r.get('ucet'), r.get('banka'), r.get('email'), r.get('telefon'), r.get('iban')))
+                        for r in d.get('klienti', []):
+                            exist = run_query("SELECT id FROM klienti WHERE jmeno=? AND user_id=?", (r.get('jmeno'), uid), True)
+                            if exist: client_map[r['id']] = exist['id']
+                            else:
+                                nid = run_command("INSERT INTO klienti (user_id, jmeno, adresa, ico, dic, email, poznamka) VALUES (?,?,?,?,?,?,?)", (uid, r.get('jmeno'), r.get('adresa'), r.get('ico'), r.get('dic'), r.get('email'), r.get('poznamka')))
+                                if r.get('id'): client_map[r['id']] = nid
+                        for r in d.get('kategorie', []):
+                            exist = run_query("SELECT id FROM kategorie WHERE nazev=? AND user_id=?", (r.get('nazev'), uid), True)
+                            if exist: cat_map[r['id']] = exist['id']
+                            else:
+                                blob = base64.b64decode(r.get('logo_blob')) if r.get('logo_blob') else None
+                                nid = run_command("INSERT INTO kategorie (user_id, nazev, barva, prefix, aktualni_cislo, logo_blob) VALUES (?,?,?,?,?,?)", (uid, r.get('nazev'), r.get('barva'), r.get('prefix'), r.get('aktualni_cislo'), blob))
+                                if r.get('id'): cat_map[r['id']] = nid
+                        for r in d.get('faktury', []):
+                            cid = client_map.get(r.get('klient_id')); kid = cat_map.get(r.get('kategorie_id'))
+                            if cid and kid:
+                                exist_f = run_query("SELECT id FROM faktury WHERE cislo_full=? AND user_id=?", (r.get('cislo_full'), uid), True)
+                                if not exist_f:
+                                    new_fid = run_command("INSERT INTO faktury (user_id, cislo, cislo_full, klient_id, kategorie_id, datum_vystaveni, datum_duzp, datum_splatnosti, castka_celkem, zpusob_uhrady, variabilni_symbol, cislo_objednavky, uvodni_text, uhrazeno, muj_popis) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (uid, r.get('cislo'), r.get('cislo_full'), cid, kid, r.get('datum_vystaveni'), r.get('datum_duzp'), r.get('datum_splatnosti'), r.get('castka_celkem'), r.get('zpusob_uhrady'), r.get('variabilni_symbol'), r.get('cislo_objednavky'), r.get('uvodni_text'), r.get('uhrazeno'), r.get('muj_popis')))
+                                    for item in d.get('faktura_polozky', []):
+                                        if item.get('faktura_id') == r.get('id'): run_command("INSERT INTO faktura_polozky (faktura_id, nazev, cena) VALUES (?,?,?)", (new_fid, item.get('nazev'), item.get('cena')))
+                        st.success("Import hotov"); st.rerun()
+                    except: st.error("Chyba importu")
         else:
             with st.expander("💾 Zálohování"): st.info("Dostupné v PRO verzi.")
