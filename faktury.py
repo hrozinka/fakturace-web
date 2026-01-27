@@ -207,7 +207,6 @@ def generate_pdf(faktura_id, uid, is_pro):
         if use_font: return text
         return remove_accents(text)
 
-    # Funkce pro formátování měny (1 000,00)
     def fmt_price(val):
         return f"{val:,.2f}".replace(",", " ").replace(".", ",")
 
@@ -264,32 +263,23 @@ def generate_pdf(faktura_id, uid, is_pro):
         pdf.cell(95, 5, "DODAVATEL:", 0, 0); pdf.cell(95, 5, "ODBĚRATEL:", 0, 1); pdf.set_text_color(0)
         y = pdf.get_y()
         
-        # --- SESTAVENÍ ADRESY DODAVATELE (bez None/prázdných řádků) ---
-        dodavatel_lines = [txt(moje.get('nazev',''))]
-        if moje.get('adresa'): dodavatel_lines.append(txt(moje['adresa']))
-        if moje.get('ico'): dodavatel_lines.append(txt(f"IČ: {moje['ico']}"))
-        if moje.get('dic'): dodavatel_lines.append(txt(f"DIČ: {moje['dic']}"))
-        if moje.get('email'): dodavatel_lines.append(txt(moje['email']))
-        if moje.get('telefon'): dodavatel_lines.append(txt(moje['telefon']))
-        dodavatel_text = "\n".join(dodavatel_lines)
-
-        # Dodavatel (tisk)
+        # Dodavatel
         if use_font: pdf.set_font('ArialCS', 'B', 11)
         else: pdf.set_font('Arial', 'B', 11)
-        pdf.cell(95, 5, txt(moje.get('nazev','')), 0, 1) # První řádek tučně
+        pdf.cell(95, 5, txt(moje.get('nazev','')), 0, 1)
         
         if use_font: pdf.set_font('ArialCS', '', 10)
         else: pdf.set_font('Arial', '', 10)
-        # Tisk zbytku adresy
-        pdf.multi_cell(95, 5, "\n".join(dodavatel_lines[1:]))
         
-        # --- SESTAVENÍ ADRESY ODBĚRATELE ---
-        odberatel_lines = [txt(data.get('k_jmeno',''))]
-        if data.get('k_adresa'): odberatel_lines.append(txt(data['k_adresa']))
-        if data.get('k_ico'): odberatel_lines.append(txt(f"IČ: {data['k_ico']}"))
-        if data.get('k_dic'): odberatel_lines.append(txt(f"DIČ: {data['k_dic']}"))
+        dod_lines = []
+        if moje.get('adresa'): dod_lines.append(txt(moje['adresa']))
+        if moje.get('ico'): dod_lines.append(txt(f"IČ: {moje['ico']}"))
+        if moje.get('dic'): dod_lines.append(txt(f"DIČ: {moje['dic']}"))
+        if moje.get('email'): dod_lines.append(txt(moje['email']))
         
-        # Odběratel (tisk)
+        pdf.multi_cell(95, 5, "\n".join(dod_lines))
+        
+        # Odběratel
         pdf.set_xy(105, y)
         if use_font: pdf.set_font('ArialCS', 'B', 11)
         else: pdf.set_font('Arial', 'B', 11)
@@ -298,13 +288,18 @@ def generate_pdf(faktura_id, uid, is_pro):
         pdf.set_xy(105, pdf.get_y())
         if use_font: pdf.set_font('ArialCS', '', 10)
         else: pdf.set_font('Arial', '', 10)
-        pdf.multi_cell(95, 5, "\n".join(odberatel_lines[1:]))
+        
+        odb_lines = []
+        if data.get('k_adresa'): odb_lines.append(txt(data['k_adresa']))
+        if data.get('k_ico'): odb_lines.append(txt(f"IČ: {data['k_ico']}"))
+        if data.get('k_dic'): odb_lines.append(txt(f"DIČ: {data['k_dic']}"))
+        
+        pdf.multi_cell(95, 5, "\n".join(odb_lines))
         
         pdf.ln(10); pdf.set_fill_color(r, g, b); pdf.rect(10, pdf.get_y(), 190, 2, 'F'); pdf.ln(5)
         
         if use_font: pdf.set_font('ArialCS', 'B', 12)
         else: pdf.set_font('Arial', 'B', 12)
-        # UPRAVENO: "Faktura č." místo "c."
         pdf.cell(100, 8, txt(f"Faktura č.: {cislo_f}"), 0, 1)
         
         if use_font: pdf.set_font('ArialCS', '', 10)
@@ -312,21 +307,18 @@ def generate_pdf(faktura_id, uid, is_pro):
         pdf.cell(50, 6, "Vystaveno:", 0, 0); pdf.cell(50, 6, format_date(data.get('datum_vystaveni')), 0, 1)
         pdf.cell(50, 6, "Splatnost:", 0, 0); pdf.cell(50, 6, format_date(data.get('datum_splatnosti')), 0, 1)
         
-        # Zobrazit účet jen pokud existuje
         if moje.get('ucet'):
             pdf.cell(50, 6, "Ucet:", 0, 0); pdf.cell(50, 6, txt(moje.get('ucet')), 0, 1)
         else:
-            pdf.ln(6) # Jen odřádkovat pokud není účet
+            pdf.ln(6)
             
         pdf.cell(50, 6, "VS:", 0, 0); pdf.cell(50, 6, txt(data.get('variabilni_symbol')), 0, 1)
         
-        # --- ÚVODNÍ TEXT ---
         uvodni_t = data.get('uvodni_text')
         if uvodni_t:
             pdf.ln(8)
             pdf.multi_cell(190, 5, txt(uvodni_t))
         
-        # --- TABULKA POLOŽEK ---
         pdf.ln(10)
         pdf.set_fill_color(240, 240, 240) 
         if use_font: pdf.set_font('ArialCS', 'B', 10)
@@ -347,7 +339,6 @@ def generate_pdf(faktura_id, uid, is_pro):
                 continue 
                 
             pdf.cell(140, 8, txt(nazev), 0, 0, 'L')
-            # UPRAVENO: Formátování ceny s mezerou
             pdf.cell(50, 8, f"{fmt_price(p.get('cena',0))} {txt('Kč')}", 0, 1, 'R')
             pdf.line(10, pdf.get_y(), 200, pdf.get_y())
             
@@ -355,7 +346,6 @@ def generate_pdf(faktura_id, uid, is_pro):
         if use_font: pdf.set_font('ArialCS', 'B', 14)
         else: pdf.set_font('Arial', 'B', 14)
         
-        # UPRAVENO: Formátování ceny celkem
         pdf.cell(190, 10, f"CELKEM: {fmt_price(data.get('castka_celkem',0))} {txt('Kč')}", 0, 1, 'R')
         
         if is_pro and moje.get('iban'):
@@ -692,12 +682,32 @@ else:
                     st.rerun()
         
         with st.expander(f"🔔 Upozornění {'(PRO)' if not is_pro else ''}"):
-            if not is_pro: st.warning("🔒 Pouze pro PRO verzi.")
+            if not is_pro:
+                st.warning("🔒 Pouze pro PRO verzi.")
             else:
-                act = st.toggle("Aktivní", value=bool(c.get('notify_active', 0)))
-                ne = st.text_input("Email", value=c.get('notify_email',''))
-                if st.button("Uložit SMTP"):
-                    run_command("UPDATE nastaveni SET notify_active=?, notify_email=? WHERE id=?", (int(act), ne, c.get('id'))); st.success("Uloženo")
+                st.markdown("### 📧 Nastavení automatického odesílání")
+                act = st.toggle("Aktivovat upozornění", value=bool(c.get('notify_active', 0)))
+                
+                c1, c2 = st.columns(2)
+                n_days = c1.number_input("Dní před splatností", value=c.get('notify_days', 3), min_value=1)
+                n_email = c2.text_input("Váš Email (pro notifikace)", value=c.get('notify_email', ''))
+
+                st.divider()
+                st.markdown("### ⚙️ SMTP Server (Odesílatel)")
+                st.info("Zde zadejte údaje k emailu, ze kterého se mají zprávy odesílat.")
+                
+                s_server = st.text_input("SMTP Server", value=c.get('smtp_server', 'smtp.seznam.cz'))
+                c3, c4 = st.columns(2)
+                s_port = c3.number_input("Port", value=c.get('smtp_port', 465))
+                s_user = c4.text_input("SMTP Email (Login)", value=c.get('smtp_email', ''))
+                s_pass = st.text_input("SMTP Heslo", value=c.get('smtp_password', ''), type="password")
+
+                if st.button("💾 Uložit nastavení upozornění"):
+                    run_command(
+                        "UPDATE nastaveni SET notify_active=?, notify_days=?, notify_email=?, smtp_server=?, smtp_port=?, smtp_email=?, smtp_password=? WHERE id=?", 
+                        (int(act), n_days, n_email, s_server, s_port, s_user, s_pass, c.get('id'))
+                    )
+                    st.success("Nastavení uloženo.")
 
         if is_pro:
             with st.expander("💾 Zálohování dat (PRO)"):
@@ -738,6 +748,7 @@ else:
                                     for item in d.get('faktura_polozky', []):
                                         if item.get('faktura_id') == r.get('id'):
                                             run_command("INSERT INTO faktura_polozky (faktura_id, nazev, cena) VALUES (?,?,?)", (new_fid, item.get('nazev'), item.get('cena')))
+                        
                         st.success("Hotovo! Data byla sloučena."); st.rerun()
                     except Exception as e: st.error(f"Chyba: {e}")
         else:
