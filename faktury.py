@@ -686,23 +686,36 @@ else:
                 st.warning("🔒 Pouze pro PRO verzi.")
             else:
                 st.markdown("### 📧 Nastavení automatického odesílání")
-                act = st.toggle("Aktivovat upozornění", value=bool(c.get('notify_active', 0)))
+                st.info("💡 **Návod:**\n- **Seznam.cz:** Použijte své heslo. Pokud máte 2FA, použijte heslo aplikace.\n- **Gmail:** Musíte vygenerovat **Heslo aplikace** (App Password) v nastavení Google účtu.\n- **Vlastní:** Zadejte údaje dle vašeho hostingu.")
                 
-                c1, c2 = st.columns(2)
-                n_days = c1.number_input("Dní před splatností", value=c.get('notify_days', 3), min_value=1)
-                n_email = c2.text_input("Váš Email (pro notifikace)", value=c.get('notify_email', ''))
+                act = st.toggle("Aktivovat odesílání", value=bool(c.get('notify_active', 0)))
+                
+                col_a, col_b = st.columns(2)
+                n_days = col_a.number_input("Kolik dní před splatností?", value=c.get('notify_days', 3), min_value=1)
+                n_email = col_b.text_input("Váš Email (pro notifikace)", value=c.get('notify_email', ''))
 
                 st.divider()
-                st.markdown("### ⚙️ SMTP Server (Odesílatel)")
-                st.info("Zde zadejte údaje k emailu, ze kterého se mají zprávy odesílat.")
+                st.markdown("### ⚙️ SMTP Server")
                 
-                s_server = st.text_input("SMTP Server", value=c.get('smtp_server', 'smtp.seznam.cz'))
+                preset = st.selectbox("Rychlé nastavení", ["-- Vyberte --", "Seznam.cz", "Gmail", "Vlastní"])
+                
+                # Defaultní hodnoty z DB
+                d_srv = c.get('smtp_server', 'smtp.seznam.cz')
+                d_prt = c.get('smtp_port', 465)
+                
+                if preset == "Seznam.cz":
+                    d_srv = "smtp.seznam.cz"; d_prt = 465
+                elif preset == "Gmail":
+                    d_srv = "smtp.gmail.com"; d_prt = 465
+                
+                s_server = st.text_input("SMTP Server", value=d_srv)
+                
                 c3, c4 = st.columns(2)
-                s_port = c3.number_input("Port", value=c.get('smtp_port', 465))
-                s_user = c4.text_input("SMTP Email (Login)", value=c.get('smtp_email', ''))
-                s_pass = st.text_input("SMTP Heslo", value=c.get('smtp_password', ''), type="password")
+                s_port = c3.number_input("Port (SSL)", value=d_prt)
+                s_user = c4.text_input("Login (Email)", value=c.get('smtp_email', ''))
+                s_pass = st.text_input("Heslo", value=c.get('smtp_password', ''), type="password")
 
-                if st.button("💾 Uložit nastavení upozornění"):
+                if st.button("💾 Uložit nastavení"):
                     run_command(
                         "UPDATE nastaveni SET notify_active=?, notify_days=?, notify_email=?, smtp_server=?, smtp_port=?, smtp_email=?, smtp_password=? WHERE id=?", 
                         (int(act), n_days, n_email, s_server, s_port, s_user, s_pass, c.get('id'))
