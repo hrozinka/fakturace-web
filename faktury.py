@@ -24,17 +24,14 @@ from PIL import Image
 from fpdf import FPDF
 import qrcode
 
-# --- 0. KONFIGURACE (BEZPEČNOSTNÍ OPRAVA) ---
+# --- 0. KONFIGURACE ---
 try:
-    # 1. Zkusíme načíst heslo ze secrets.toml
     admin_pass_init = st.secrets["ADMIN_INIT_PASS"]
     email_pass = st.secrets.get("EMAIL_PASSWORD", "")
 except Exception:
-    # 2. Pokud selže, zkusíme proměnné prostředí (ale bez fallbacku "admin"!)
     admin_pass_init = os.getenv("ADMIN_INIT_PASS")
     email_pass = os.getenv("EMAIL_PASSWORD", "")
 
-# 3. Pokud heslo stále nemáme, zastavíme aplikaci
 if not admin_pass_init:
     st.error("⛔ CHYBA BEZPEČNOSTI: Není nastaveno heslo ADMIN_INIT_PASS v secrets.toml!")
     st.stop()
@@ -51,51 +48,135 @@ SYSTEM_EMAIL = {
 DB_FILE = 'fakturace_v47_final.db' 
 FONT_FILE = 'arial.ttf' 
 
-# --- 1. DESIGN (UPRAVENO NA CENTERED) ---
-st.set_page_config(page_title="Fakturace Pro v5.12", page_icon="💎", layout="centered")
+# --- 1. DESIGN (MODERNÍ + FIX PRO MOBILY) ---
+st.set_page_config(page_title="Fakturace Pro v5.13", page_icon="💎", layout="centered")
 
 st.markdown("""
     <style>
-    .stApp { background-color: #0f172a !important; color: #f8fafc !important; font-family: sans-serif; }
-    .stTextInput input, .stNumberInput input, .stTextArea textarea, .stDateInput input, .stSelectbox div[data-baseweb="select"] {
-        background-color: #1e293b !important; border: 1px solid #334155 !important; color: #fff !important;
-        border-radius: 12px !important; padding: 12px !important;
+    /* 1. GLOBÁLNÍ VYNUCENÍ BAREV (Fix pro Safari/Mobile) */
+    .stApp { 
+        background-color: #0f172a !important; 
+        color: #f8fafc !important; 
+        font-family: sans-serif; 
     }
-    section[data-testid="stSidebar"] { background-color: #0f172a !important; }
-    section[data-testid="stSidebar"] div, section[data-testid="stSidebar"] label, section[data-testid="stSidebar"] span, section[data-testid="stSidebar"] p { color: #f8fafc !important; }
     
+    /* Vynucení bílého textu pro všechny běžné elementy */
+    h1, h2, h3, h4, h5, h6, p, label, span, div, li {
+        color: #f8fafc !important;
+    }
+
+    /* 2. VSTUPY (Inputs) */
+    .stTextInput input, .stNumberInput input, .stTextArea textarea, .stDateInput input, .stSelectbox div[data-baseweb="select"] {
+        background-color: #1e293b !important; 
+        border: 1px solid #334155 !important; 
+        color: #fff !important; 
+        border-radius: 12px !important; 
+        padding: 12px !important;
+    }
+    /* Placeholder text */
+    ::placeholder { color: #94a3b8 !important; opacity: 1; }
+
+    /* 3. ZÁLOŽKY (Tabs) - Přihlášení/Registrace */
+    button[data-baseweb="tab"] {
+        background-color: transparent !important;
+    }
+    button[data-baseweb="tab"] div p {
+        color: #94a3b8 !important; /* Neaktivní tab - šedá */
+        font-weight: 600;
+    }
+    button[data-baseweb="tab"][aria-selected="true"] div p {
+        color: #fbbf24 !important; /* Aktivní tab - zlatá */
+    }
+    
+    /* 4. SIDEBAR */
+    section[data-testid="stSidebar"] { background-color: #0f172a !important; }
+    
+    /* Tlačítka v menu - STEJNÁ ŠÍŘKA */
     section[data-testid="stSidebar"] .stRadio label {
-        background-color: #1e293b !important; padding: 15px !important; margin-bottom: 8px !important;
-        border-radius: 10px !important; border: 1px solid #334155 !important;
-        font-weight: 600 !important; font-size: 16px !important; display: flex; justify-content: flex-start; cursor: pointer;
-        width: 100% !important; box-sizing: border-box !important;
+        background-color: #1e293b !important; 
+        padding: 15px !important; 
+        margin-bottom: 8px !important;
+        border-radius: 10px !important; 
+        border: 1px solid #334155 !important;
+        font-weight: 600 !important; 
+        font-size: 16px !important; 
+        display: flex; 
+        justify-content: flex-start; 
+        cursor: pointer;
+        width: 100% !important; 
+        box-sizing: border-box !important;
     }
     section[data-testid="stSidebar"] .stRadio label[data-checked="true"] {
-        background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%) !important; color: #0f172a !important; border: none !important; font-weight: 800 !important;
+        background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%) !important; 
+        color: #0f172a !important; 
+        border: none !important; 
+        font-weight: 800 !important;
     }
+    /* Uvnitř aktivního tlačítka v menu musí být text tmavý */
+    section[data-testid="stSidebar"] .stRadio label[data-checked="true"] p {
+        color: #0f172a !important;
+    }
+
+    /* 5. TLAČÍTKA (Buttons) */
     .stButton > button, [data-testid="stDownloadButton"] > button {
-        background-color: #334155 !important; color: #ffffff !important; border-radius: 10px !important; height: 50px; font-weight: 600; border: 1px solid #475569 !important; width: 100%;
+        background-color: #334155 !important; 
+        color: #ffffff !important; 
+        border-radius: 10px !important; 
+        height: 50px; 
+        font-weight: 600; 
+        border: 1px solid #475569 !important; 
+        width: 100%;
     }
-    .stButton > button:hover, [data-testid="stDownloadButton"] > button:hover { border-color: #fbbf24 !important; color: #fbbf24 !important; }
-    div[data-testid="stForm"] button[kind="primary"] { background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%) !important; color: #0f172a !important; border: none !important; }
-    
+    .stButton > button:hover, [data-testid="stDownloadButton"] > button:hover { 
+        border-color: #fbbf24 !important; 
+        color: #fbbf24 !important; 
+    }
+    div[data-testid="stForm"] button[kind="primary"] { 
+        background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%) !important; 
+        color: #0f172a !important; 
+        border: none !important; 
+    }
+    /* Text uvnitř primárního tlačítka musí být tmavý */
+    div[data-testid="stForm"] button[kind="primary"] p {
+        color: #0f172a !important;
+    }
+
+    /* 6. STATISTICKÉ BOXY (DASHBOARD) */
     .stat-container { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; justify-content: space-between; }
-    .stat-box { background: #1e293b; border-radius: 12px; padding: 15px; flex: 1; min-width: 140px; text-align: center; border: 1px solid #334155; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
-    .mini-stat-box { background: #334155; border-radius: 8px; padding: 10px; flex: 1; min-width: 100px; text-align: center; border: 1px solid #475569; margin-bottom: 5px; }
+    .stat-box { 
+        background: #1e293b; border-radius: 12px; padding: 15px; flex: 1; 
+        min-width: 140px; text-align: center; border: 1px solid #334155; 
+        box-shadow: 0 4px 6px rgba(0,0,0,0.2); 
+    }
+    .mini-stat-box { 
+        background: #334155; border-radius: 8px; padding: 10px; flex: 1; 
+        min-width: 100px; text-align: center; border: 1px solid #475569; margin-bottom: 5px; 
+    }
     
     @media only screen and (max-width: 768px) {
         .stat-box, .mini-stat-box { min-width: 100% !important; margin-bottom: 10px; }
         .stat-container { flex-direction: column; }
     }
-    .stat-label { font-size: 11px; text-transform: uppercase; color: #94a3b8; margin-bottom: 5px; font-weight: 700; }
-    .stat-value { font-size: 20px; font-weight: 800; color: #fff; }
-    .mini-value { font-size: 16px; font-weight: 700; color: #e2e8f0; }
-    .text-green { color: #34d399 !important; } .text-red { color: #f87171 !important; } .text-gold { color: #fbbf24 !important; }
-    div[data-testid="stExpander"] { background-color: #1e293b !important; border: 1px solid #334155 !important; border-radius: 12px !important; }
+
+    /* Specifické barvy čísel (musí přebít globální nastavení) */
+    .text-green, .text-green span { color: #34d399 !important; } 
+    .text-red, .text-red span { color: #f87171 !important; } 
+    .text-gold, .text-gold span { color: #fbbf24 !important; }
     
-    /* PRO/FREE Badge v adminu */
-    .badge-admin-pro { background-color: #34d399; color: #064e3b; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; }
-    .badge-admin-free { background-color: #94a3b8; color: #1e293b; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; }
+    .stat-label { font-size: 11px; text-transform: uppercase; color: #94a3b8 !important; margin-bottom: 5px; font-weight: 700; }
+    .stat-value { font-size: 20px; font-weight: 800; color: #fff !important; }
+    
+    /* 7. OSTATNÍ KOMPONENTY */
+    div[data-testid="stExpander"] { 
+        background-color: #1e293b !important; 
+        border: 1px solid #334155 !important; 
+        border-radius: 12px !important; 
+    }
+    
+    /* Login Page Styling */
+    .login-header { font-size: 32px; font-weight: 700; color: #f8fafc !important; margin-bottom: 10px; }
+    .login-sub { color: #94a3b8 !important; margin-bottom: 30px; }
+    .login-container { text-align: center; padding: 20px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -132,16 +213,11 @@ def init_db():
     try: c.execute("INSERT OR IGNORE INTO email_templates (name, subject, body) VALUES ('welcome', 'Vítejte ve vašem fakturačním systému', 'Dobrý den {name},\n\nVáš účet byl úspěšně vytvořen.\n\nS pozdravem,\nTým MojeFakturace')")
     except: pass
     
-    # --- OPRAVA: SYNCHRONIZACE HESLA ADMINA (NUCENÁ AKTUALIZACE) ---
     try:
         adm_hash = hashlib.sha256(str.encode(admin_pass_init)).hexdigest()
-        # Vložení admina, pokud neexistuje
         c.execute("INSERT OR IGNORE INTO users (username, password_hash, role, full_name, email, phone, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)", ("admin", adm_hash, "admin", "Super Admin", "admin@system.cz", "000000000", datetime.now().isoformat()))
-        # VYNUCENÁ aktualizace hesla podle secrets.toml
         c.execute("UPDATE users SET password_hash=? WHERE username='admin'", (adm_hash,))
-    except Exception as e: 
-        print(f"Chyba admin sync: {e}")
-    
+    except Exception as e: print(f"Chyba admin sync: {e}")
     conn.commit(); conn.close()
 
 if 'db_inited' not in st.session_state:
@@ -347,7 +423,7 @@ def reset_forms():
 if not st.session_state.user_id:
     col1, col2, col3 = st.columns([1, 10, 1])
     with col2:
-        st.markdown("""<div class="login-container"><div style="font-size: 50px; margin-bottom: 10px;">💎</div><div class="login-header">Fakturace Pro</div><div style="color: #94a3b8; margin-bottom: 30px;">Mobilní fakturace nové generace.</div></div>""", unsafe_allow_html=True)
+        st.markdown("""<div class="login-container"><div style="font-size: 50px; margin-bottom: 10px;">💎</div><div class="login-header">Fakturace Pro</div><div class="login-sub">Mobilní fakturace nové generace.</div></div>""", unsafe_allow_html=True)
         t1, t2, t3 = st.tabs(["PŘIHLÁŠENÍ", "REGISTRACE", "ZAPOMNĚL JSEM HESLO"])
         with t1:
             with st.form("log"):
