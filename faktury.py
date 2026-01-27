@@ -49,7 +49,7 @@ DB_FILE = 'fakturace_v47_final.db'
 FONT_FILE = 'arial.ttf' 
 
 # --- 1. DESIGN ---
-st.set_page_config(page_title="MojeFaktury v6.3", page_icon="💎", layout="centered")
+st.set_page_config(page_title="MojeFaktury v6.4", page_icon="💎", layout="centered")
 
 st.markdown("""
     <style>
@@ -257,9 +257,14 @@ def send_email_custom(to, sub, body, attachment=None, filename="zaloha.json"):
         return True
     except: return False
 
-def send_welcome_email_db(to, name):
+def send_welcome_email_db(to, name, license_key=None):
     tpl = run_query("SELECT subject, body FROM email_templates WHERE name='welcome'", single=True); tpl_dict = dict(tpl) if tpl else {}
     s = tpl_dict.get('subject', "Vítejte"); b = tpl_dict.get('body', f"Dobrý den {name}").replace("{name}", name)
+    
+    # PŘIDÁNÍ INFO O TRIAL VERZI DO EMAILU
+    if license_key:
+        b += f"\n\n🎁 DÁREK: Získáváte 14 dní verze PRO ZDARMA!\nVáš licenční klíč: {license_key}\n(Byl automaticky aktivován, nemusíte nic dělat)."
+        
     return send_email_custom(to, s, b)
 
 def get_export_data(user_id):
@@ -388,11 +393,10 @@ def reset_forms():
     st.session_state.form_reset_id += 1; st.session_state.ares_data = {}
     st.session_state.items_df = pd.DataFrame(columns=["Popis položky", "Cena"])
 
-# --- 8. LOGIN & LANDING PAGE (OPRAVENO FORMÁTOVÁNÍ HTML) ---
+# --- 8. LOGIN & LANDING PAGE ---
 if not st.session_state.user_id:
     col1, col2, col3 = st.columns([1, 10, 1])
     with col2:
-        # POUŽITÍ HTML BEZ ODSAZENÍ (ABY SE NEBRALO JAKO KÓD)
         st.markdown("""
 <div class="login-container">
 <div class="app-logo">💎</div>
@@ -402,6 +406,7 @@ Fakturace pro moderní živnostníky.<br>
 Rychlá, přehledná a vždy po ruce.
 </div>
 <div class="feature-box">
+<p style="text-align:left; margin-bottom:5px;">✅ <b>Vyzkoušejte PRO verzi na 14 dní ZDARMA</b></p>
 <p style="text-align:left; margin-bottom:5px;">✅ <b>Vystavení faktury do 30 vteřin</b></p>
 <p style="text-align:left; margin-bottom:5px;">✅ <b>Automatické načítání z ARES</b></p>
 <p style="text-align:left; margin-bottom:5px;">✅ <b>Export pro účetní (ISDOC)</b></p>
@@ -430,8 +435,25 @@ Rychlá, přehledná a vždy po ruce.
             with st.form("reg"):
                 f=st.text_input("Jméno a Příjmení"); u=st.text_input("Login"); e=st.text_input("Email"); t_tel=st.text_input("Telefon"); p=st.text_input("Heslo",type="password")
                 if st.form_submit_button("Vytvořit účet", use_container_width=True):
-                    try: run_command("INSERT INTO users (username,password_hash,full_name,email,phone,created_at,force_password_change) VALUES (?,?,?,?,?,?,0)",(u,hash_password(p),f,e,t_tel,datetime.now().isoformat())); send_welcome_email_db(e, f); st.success("Hotovo! Přihlašte se.")
-                    except: st.error("Login obsazen.")
+                    try:
+                        # 1. Vytvoření uživatele
+                        uid_new = run_command("INSERT INTO users (username,password_hash,full_name,email,phone,created_at,force_password_change) VALUES (?,?,?,?,?,?,0)",(u,hash_password(p),f,e,t_tel,datetime.now().isoformat()))
+                        
+                        # 2. Generování TRIAL klíče
+                        trial_key = generate_license_key()
+                        exp_date = date.today() + timedelta(days=14)
+                        
+                        # 3. Uložení klíče
+                        run_command("INSERT INTO licencni_klice (kod, dny_platnosti, vygenerovano, poznamka, pouzito_uzivatelem_id) VALUES (?,?,?,?,?)", (trial_key, 14, datetime.now().isoformat(), "Auto-Trial 14 dní", uid_new))
+                        
+                        # 4. Aktivace uživatele
+                        run_command("UPDATE users SET license_key=?, license_valid_until=? WHERE id=?", (trial_key, exp_date, uid_new))
+                        
+                        # 5. Odeslání emailu s klíčem
+                        send_welcome_email_db(e, f, trial_key)
+                        
+                        st.success("Hotovo! Účet vytvořen + 14 dní PRO zdarma. Přihlašte se.")
+                    except Exception as ex: st.error(f"Chyba: {ex}")
         with t3:
             with st.form("forgot"):
                 fe = st.text_input("Váš Email"); 
