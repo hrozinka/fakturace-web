@@ -48,8 +48,8 @@ SYSTEM_EMAIL = {
 DB_FILE = 'fakturace_v47_final.db' 
 FONT_FILE = 'arial.ttf' 
 
-# --- 1. DESIGN (MODERNÍ + FIX PRO MOBILY A DROPDOWNY) ---
-st.set_page_config(page_title="Fakturace Pro v5.14", page_icon="💎", layout="centered")
+# --- 1. DESIGN (FIX PRO MOBILNÍ DROPDOWN) ---
+st.set_page_config(page_title="Fakturace Pro v5.15", page_icon="💎", layout="centered")
 
 st.markdown("""
     <style>
@@ -60,65 +60,75 @@ st.markdown("""
         font-family: sans-serif; 
     }
     
-    /* Vynucení bílého textu */
     h1, h2, h3, h4, h5, h6, p, label, span, div, li {
         color: #f8fafc !important;
     }
 
-    /* 2. VSTUPY (Inputs) */
-    .stTextInput input, .stNumberInput input, .stTextArea textarea, .stDateInput input, .stSelectbox div[data-baseweb="select"] {
+    /* 2. VSTUPY */
+    .stTextInput input, .stNumberInput input, .stTextArea textarea, .stDateInput input {
         background-color: #1e293b !important; 
         border: 1px solid #334155 !important; 
         color: #fff !important; 
         border-radius: 12px !important; 
         padding: 12px !important;
     }
-    ::placeholder { color: #94a3b8 !important; opacity: 1; }
-
-    /* --- 3. FIX PRO ROLOVACÍ NABÍDKY A KALENDÁŘE (To byl ten problém) --- */
     
-    /* Pozadí vyskakovacího menu (Dropdown) */
-    div[data-baseweb="popover"], div[data-baseweb="menu"], ul[data-baseweb="menu"] {
+    /* 3. OPRAVA ROLOVACÍCH NABÍDEK (SELECTBOX) PRO MOBILY */
+    
+    /* Zavřený selectbox */
+    .stSelectbox div[data-baseweb="select"] {
         background-color: #1e293b !important;
+        border: 1px solid #334155 !important;
+        color: #fff !important;
+    }
+    
+    /* Otevřené menu (kontejner) */
+    ul[data-baseweb="menu"] {
+        background-color: #0f172a !important; /* Tmavé pozadí */
         border: 1px solid #334155 !important;
     }
     
     /* Jednotlivé položky v menu */
     li[data-baseweb="option"] {
-        color: #fff !important; /* Bílý text */
+        background-color: #0f172a !important; /* Tmavé pozadí položky */
+        color: #f8fafc !important; /* Bílý text */
     }
     
-    /* Hover efekt v menu (aby bylo vidět, na co klikám) */
-    li[data-baseweb="option"]:hover, li[role="option"][aria-selected="true"] {
-        background-color: #334155 !important;
+    /* Text uvnitř položky (někdy je ve vnořeném divu) */
+    li[data-baseweb="option"] div {
+        color: #f8fafc !important;
     }
 
-    /* Kalendář (Date Input) - vnitřek */
+    /* Vybraná nebo přejetá myší položka */
+    li[data-baseweb="option"][aria-selected="true"],
+    li[data-baseweb="option"]:hover {
+        background-color: #fbbf24 !important; /* Zlaté pozadí */
+    }
+    
+    /* Text vybrané položky (musí být tmavý na zlatém pozadí) */
+    li[data-baseweb="option"][aria-selected="true"] div,
+    li[data-baseweb="option"]:hover div {
+        color: #0f172a !important; /* Černý text */
+    }
+
+    /* Placeholder texty */
+    ::placeholder { color: #94a3b8 !important; opacity: 1; }
+
+    /* 4. KALENDÁŘ */
     div[data-baseweb="calendar"] {
         background-color: #1e293b !important;
-        color: #fff !important;
     }
     div[data-baseweb="calendar"] button {
-        background-color: transparent !important;
         color: #fff !important;
-    }
-    /* Dny v měsíci */
-    div[data-baseweb="calendar"] div[aria-label] {
-        color: #fff !important;
-    }
-    div[data-baseweb="calendar"] div[aria-label]:hover {
-        background-color: #fbbf24 !important;
-        color: #000 !important;
     }
 
-    /* 4. ZÁLOŽKY (Tabs) */
+    /* 5. ZÁLOŽKY (Tabs) */
     button[data-baseweb="tab"] { background-color: transparent !important; }
     button[data-baseweb="tab"] div p { color: #94a3b8 !important; font-weight: 600; }
     button[data-baseweb="tab"][aria-selected="true"] div p { color: #fbbf24 !important; }
     
-    /* 5. SIDEBAR */
+    /* 6. SIDEBAR */
     section[data-testid="stSidebar"] { background-color: #0f172a !important; }
-    
     section[data-testid="stSidebar"] .stRadio label {
         background-color: #1e293b !important; 
         padding: 15px !important; 
@@ -143,7 +153,7 @@ st.markdown("""
         color: #0f172a !important;
     }
 
-    /* 6. TLAČÍTKA */
+    /* 7. TLAČÍTKA */
     .stButton > button, [data-testid="stDownloadButton"] > button {
         background-color: #334155 !important; 
         color: #ffffff !important; 
@@ -166,7 +176,7 @@ st.markdown("""
         color: #0f172a !important;
     }
 
-    /* 7. STATISTIKY */
+    /* 8. STATISTIKY */
     .stat-container { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; justify-content: space-between; }
     .stat-box { 
         background: #1e293b; border-radius: 12px; padding: 15px; flex: 1; 
@@ -238,11 +248,16 @@ def init_db():
     try: c.execute("INSERT OR IGNORE INTO email_templates (name, subject, body) VALUES ('welcome', 'Vítejte ve vašem fakturačním systému', 'Dobrý den {name},\n\nVáš účet byl úspěšně vytvořen.\n\nS pozdravem,\nTým MojeFakturace')")
     except: pass
     
+    # --- OPRAVA: SYNCHRONIZACE HESLA ADMINA (NUCENÁ AKTUALIZACE) ---
     try:
         adm_hash = hashlib.sha256(str.encode(admin_pass_init)).hexdigest()
+        # Vložení admina, pokud neexistuje
         c.execute("INSERT OR IGNORE INTO users (username, password_hash, role, full_name, email, phone, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)", ("admin", adm_hash, "admin", "Super Admin", "admin@system.cz", "000000000", datetime.now().isoformat()))
+        # VYNUCENÁ aktualizace hesla podle secrets.toml
         c.execute("UPDATE users SET password_hash=? WHERE username='admin'", (adm_hash,))
-    except Exception as e: print(f"Chyba admin sync: {e}")
+    except Exception as e: 
+        print(f"Chyba admin sync: {e}")
+    
     conn.commit(); conn.close()
 
 if 'db_inited' not in st.session_state:
