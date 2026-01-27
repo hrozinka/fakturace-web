@@ -30,10 +30,20 @@ try:
 except:
     email_pass = os.getenv("EMAIL_PASSWORD", "")
 
+# --- 0. KONFIGURACE ---
 try:
+    # 1. Zkusíme načíst heslo ze secrets.toml
     admin_pass_init = st.secrets["ADMIN_INIT_PASS"]
-except:
-    admin_pass_init = os.getenv("ADMIN_INIT_PASS", "admin")
+    email_pass = st.secrets.get("EMAIL_PASSWORD", "")
+except Exception:
+    # 2. Pokud selže (např. lokálně bez souboru), zkusíme proměnné prostředí, ale BEZ fallbacku "admin"
+    admin_pass_init = os.getenv("ADMIN_INIT_PASS")
+    email_pass = os.getenv("EMAIL_PASSWORD", "")
+
+# 3. Pokud heslo stále nemáme, zastavíme aplikaci (BEZPEČNOST)
+if not admin_pass_init:
+    st.error("⛔ CHYBA: Není nastaveno heslo ADMIN_INIT_PASS v .streamlit/secrets.toml!")
+    st.stop()
 
 SYSTEM_EMAIL = {
     "enabled": True, 
