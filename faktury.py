@@ -51,8 +51,8 @@ SYSTEM_EMAIL = {
 DB_FILE = 'fakturace_v47_final.db' 
 FONT_FILE = 'arial.ttf' 
 
-# --- 1. DESIGN ---
-st.set_page_config(page_title="Fakturace Pro v5.11", page_icon="💎", layout="wide")
+# --- 1. DESIGN (UPRAVENO NA CENTERED) ---
+st.set_page_config(page_title="Fakturace Pro v5.12", page_icon="💎", layout="centered")
 
 st.markdown("""
     <style>
