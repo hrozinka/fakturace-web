@@ -699,7 +699,6 @@ else:
                 
                 preset = st.selectbox("Rychlé nastavení", ["-- Vyberte --", "Seznam.cz", "Gmail", "Vlastní"])
                 
-                # Defaultní hodnoty z DB
                 d_srv = c.get('smtp_server', 'smtp.seznam.cz')
                 d_prt = c.get('smtp_port', 465)
                 
@@ -715,12 +714,32 @@ else:
                 s_user = c4.text_input("Login (Email)", value=c.get('smtp_email', ''))
                 s_pass = st.text_input("Heslo", value=c.get('smtp_password', ''), type="password")
 
-                if st.button("💾 Uložit nastavení"):
+                c5, c6 = st.columns(2)
+                if c5.button("💾 Uložit nastavení"):
                     run_command(
                         "UPDATE nastaveni SET notify_active=?, notify_days=?, notify_email=?, smtp_server=?, smtp_port=?, smtp_email=?, smtp_password=? WHERE id=?", 
                         (int(act), n_days, n_email, s_server, s_port, s_user, s_pass, c.get('id'))
                     )
                     st.success("Nastavení uloženo.")
+                
+                if c6.button("📨 Odeslat test"):
+                    if not s_server or not s_user or not s_pass:
+                        st.error("Vyplňte server, email a heslo.")
+                    else:
+                        try:
+                            msg = MIMEMultipart()
+                            msg['From'] = formataddr(("Test Fakturace", s_user))
+                            msg['To'] = n_email
+                            msg['Subject'] = "Testovací email z Fakturace"
+                            msg.attach(MIMEText("Toto je testovací zpráva pro ověření nastavení SMTP.", 'plain'))
+
+                            server = smtplib.SMTP_SSL(s_server, int(s_port))
+                            server.login(s_user, s_pass)
+                            server.sendmail(s_user, n_email, msg.as_string())
+                            server.quit()
+                            st.success(f"✅ Email úspěšně odeslán na {n_email}")
+                        except Exception as e:
+                            st.error(f"❌ Chyba odesílání: {e}")
 
         if is_pro:
             with st.expander("💾 Zálohování dat (PRO)"):
