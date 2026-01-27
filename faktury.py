@@ -153,20 +153,41 @@ def get_next_invoice_number(kat_id, uid):
     if res: return (res['aktualni_cislo'], f"{res['prefix']}{res['aktualni_cislo']}", res['prefix'])
     return (1, "1", "")
 
-# --- NOVÁ FUNKCE ARES (MODIFIKOVANÁ) ---
+import requests
+
 def get_ares_data(ico):
-    import urllib3; urllib3.disable_warnings()
-    if not ico: return None
+    """
+    Načte data z ARES podle IČO
+    
+    Args:
+        ico: IČO firmy (string nebo int)
+        
+    Returns:
+        dict: {"jmeno": str, "adresa": str, "ico": str, "dic": str} nebo None při chybě
+    """
+    import urllib3
+    urllib3.disable_warnings()
+    
+    if not ico:
+        return None
+    
+    # Očištění a formátování IČO na 8 číslic
     ico = "".join(filter(str.isdigit, str(ico))).zfill(8)
     
-    url = f"https://ares.gov.cz/ekonomicke-subjekty/v-1/ekonomicke-subjekty/{ico}"
-    headers = {"accept": "application/json", "User-Agent": "Mozilla/5.0"}
+    # Správná URL ARES API
+    url = f"https://ares.gov.cz/ekonomicke-subjekty-v-be/rest/ekonomicke-subjekty/{ico}"
+    headers = {
+        "accept": "application/json",
+        "User-Agent": "Mozilla/5.0"
+    }
     
     try:
         r = requests.get(url, headers=headers, verify=False, timeout=5)
+        
         if r.status_code == 200:
             data = r.json()
-            # Zpracování adresy
+            
+            # Zpracování sídla
             sidlo = data.get('sidlo', {})
             ulice = sidlo.get('nazevUlice', '')
             cislo_dom = sidlo.get('cisloDomovni')
@@ -174,20 +195,45 @@ def get_ares_data(ico):
             obec = sidlo.get('nazevObce', '')
             psc = sidlo.get('psc', '')
             
+            # Sestavení čísla domu
             cislo_txt = str(cislo_dom) if cislo_dom else ""
-            if cislo_or: cislo_txt += f"/{cislo_or}"
+            if cislo_or:
+                cislo_txt += f"/{cislo_or}"
             
-            # Sestavení adresy: Ulice 123, 11000 Město
+            # Sestavení adresy
             adr_parts = []
-            if ulice: adr_parts.append(f"{ulice} {cislo_txt}".strip())
-            elif cislo_txt and obec: adr_parts.append(f"{obec} {cislo_txt}") # Pro malé obce bez ulic
+            if ulice:
+                adr_parts.append(f"{ulice} {cislo_txt}".strip())
+            elif cislo_txt and obec:
+                adr_parts.append(f"{obec} {cislo_txt}")
             
-            if psc and obec: adr_parts.append(f"{psc} {obec}")
+            if psc and obec:
+                adr_parts.append(f"{psc} {obec}")
             
             plna_adresa = ", ".join(adr_parts)
-            if not plna_adresa: plna_adresa = sidlo.get('textovaAdresa', '')
-
+            
+            # Fallback na textovou adresu z API
+            if not plna_adresa:
+                plna_adresa = sidlo.get('textovaAdresa', '')
+            
+            # DIČ může být v různých formátech
+            dic = data.get('dic', '')
+            if not dic:
+                dic = data.get('dicId', '')
+            
             return {
+                "jmeno": data.get('obchodniJmeno', ''),
+                "adresa": plna_adresa,
+                "ico": ico,
+                "dic": dic
+            }
+        else:
+            print(f"ARES HTTP Error: {r.status_code}")
+            
+    except Exception as e:
+        print(f"ARES Error: {e}")
+    
+    return None
                 "jmeno": data.get('obchodniJmeno', ''),
                 "adresa": plna_adresa,
                 "ico": ico,
