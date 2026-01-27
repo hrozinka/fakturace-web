@@ -47,102 +47,46 @@ SYSTEM_EMAIL = {
 DB_FILE = 'fakturace_v47_final.db' 
 FONT_FILE = 'arial.ttf' 
 
-# --- 1. DESIGN (FINÁLNÍ ÚPRAVY) ---
-st.set_page_config(page_title="Fakturace Pro v5.5", page_icon="💎", layout="wide")
+# --- 1. DESIGN ---
+st.set_page_config(page_title="Fakturace Pro v5.6", page_icon="💎", layout="wide")
 
 st.markdown("""
     <style>
-    /* 1. Hlavní pozadí a text - Vynucení pro celou aplikaci */
     .stApp { background-color: #0f172a !important; color: #f8fafc !important; font-family: sans-serif; }
-    
-    /* 2. Vstupy (Inputy) */
     .stTextInput input, .stNumberInput input, .stTextArea textarea, .stDateInput input, .stSelectbox div[data-baseweb="select"] {
-        background-color: #1e293b !important; 
-        border: 1px solid #334155 !important; 
-        color: #fff !important;
-        border-radius: 12px !important; 
-        padding: 12px !important;
+        background-color: #1e293b !important; border: 1px solid #334155 !important; color: #fff !important;
+        border-radius: 12px !important; padding: 12px !important;
     }
+    section[data-testid="stSidebar"] { background-color: #0f172a !important; }
+    section[data-testid="stSidebar"] div, section[data-testid="stSidebar"] label, section[data-testid="stSidebar"] span, section[data-testid="stSidebar"] p { color: #f8fafc !important; }
     
-    /* 3. SIDEBAR - Menu */
-    section[data-testid="stSidebar"] {
-        background-color: #0f172a !important;
-    }
-    section[data-testid="stSidebar"] div, section[data-testid="stSidebar"] label, section[data-testid="stSidebar"] span, section[data-testid="stSidebar"] p {
-        color: #f8fafc !important;
-    }
-    
-    /* Tlačítka v menu - STEJNÁ ŠÍŘKA */
     section[data-testid="stSidebar"] .stRadio label {
-        background-color: #1e293b !important; 
-        padding: 15px !important; 
-        margin-bottom: 8px !important;
-        border-radius: 10px !important; 
-        border: 1px solid #334155 !important;
-        font-weight: 600 !important; 
-        font-size: 16px !important;
-        display: flex; 
-        justify-content: flex-start; 
-        cursor: pointer;
-        width: 100% !important; /* Roztažení na celou šířku */
-        box-sizing: border-box !important;
+        background-color: #1e293b !important; padding: 15px !important; margin-bottom: 8px !important;
+        border-radius: 10px !important; border: 1px solid #334155 !important;
+        font-weight: 600 !important; font-size: 16px !important; display: flex; justify-content: flex-start; cursor: pointer;
+        width: 100% !important; box-sizing: border-box !important;
     }
     section[data-testid="stSidebar"] .stRadio label[data-checked="true"] {
-        background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%) !important;
-        color: #0f172a !important; 
-        border: none !important; 
-        font-weight: 800 !important;
+        background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%) !important; color: #0f172a !important; border: none !important; font-weight: 800 !important;
     }
-
-    /* 4. TLAČÍTKA (Včetně Download tlačítek) - Vynucení barev */
     .stButton > button, [data-testid="stDownloadButton"] > button {
-        background-color: #334155 !important; 
-        color: #ffffff !important; /* Bílá barva textu natvrdo */
-        border-radius: 10px !important; 
-        height: 50px; 
-        font-weight: 600; 
-        border: 1px solid #475569 !important;
-        width: 100%; /* Aby tlačítka ve sloupcích vypadala hezky */
+        background-color: #334155 !important; color: #ffffff !important; border-radius: 10px !important; height: 50px; font-weight: 600; border: 1px solid #475569 !important; width: 100%;
     }
+    .stButton > button:hover, [data-testid="stDownloadButton"] > button:hover { border-color: #fbbf24 !important; color: #fbbf24 !important; }
+    div[data-testid="stForm"] button[kind="primary"] { background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%) !important; color: #0f172a !important; border: none !important; }
     
-    /* Hover efekt pro tlačítka */
-    .stButton > button:hover, [data-testid="stDownloadButton"] > button:hover {
-        border-color: #fbbf24 !important;
-        color: #fbbf24 !important;
-    }
-
-    /* Primární tlačítka (např. formuláře) */
-    div[data-testid="stForm"] button[kind="primary"] { 
-        background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%) !important; 
-        color: #0f172a !important; 
-        border: none !important;
-    }
-
-    /* 5. STATISTICKÉ BOXY */
-    .stat-container { 
-        display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; justify-content: space-between;
-    }
-    .stat-box { 
-        background: #1e293b; border-radius: 12px; padding: 15px; flex: 1; 
-        min-width: 140px; text-align: center; border: 1px solid #334155; 
-        box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-    }
-    .mini-stat-box {
-        background: #334155; border-radius: 8px; padding: 10px; flex: 1; 
-        min-width: 100px; text-align: center; border: 1px solid #475569; margin-bottom: 5px;
-    }
-
-    /* 6. MOBILNÍ ÚPRAVY */
+    .stat-container { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; justify-content: space-between; }
+    .stat-box { background: #1e293b; border-radius: 12px; padding: 15px; flex: 1; min-width: 140px; text-align: center; border: 1px solid #334155; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
+    .mini-stat-box { background: #334155; border-radius: 8px; padding: 10px; flex: 1; min-width: 100px; text-align: center; border: 1px solid #475569; margin-bottom: 5px; }
+    
     @media only screen and (max-width: 768px) {
         .stat-box, .mini-stat-box { min-width: 100% !important; margin-bottom: 10px; }
         .stat-container { flex-direction: column; }
     }
-
     .stat-label { font-size: 11px; text-transform: uppercase; color: #94a3b8; margin-bottom: 5px; font-weight: 700; }
     .stat-value { font-size: 20px; font-weight: 800; color: #fff; }
     .mini-value { font-size: 16px; font-weight: 700; color: #e2e8f0; }
     .text-green { color: #34d399 !important; } .text-red { color: #f87171 !important; } .text-gold { color: #fbbf24 !important; }
-    
     div[data-testid="stExpander"] { background-color: #1e293b !important; border: 1px solid #334155 !important; border-radius: 12px !important; }
     </style>
 """, unsafe_allow_html=True)
@@ -209,17 +153,48 @@ def get_next_invoice_number(kat_id, uid):
     if res: return (res['aktualni_cislo'], f"{res['prefix']}{res['aktualni_cislo']}", res['prefix'])
     return (1, "1", "")
 
+# --- NOVÁ FUNKCE ARES (MODIFIKOVANÁ) ---
 def get_ares_data(ico):
     import urllib3; urllib3.disable_warnings()
     if not ico: return None
     ico = "".join(filter(str.isdigit, str(ico))).zfill(8)
+    
+    url = f"https://ares.gov.cz/ekonomicke-subjekty/v-1/ekonomicke-subjekty/{ico}"
+    headers = {"accept": "application/json", "User-Agent": "Mozilla/5.0"}
+    
     try:
-        r = requests.get(f"https://ares.gov.cz/ekonomicke-subjekty/v-1/ekonomicke-subjekty/{ico}", headers={"accept": "application/json", "User-Agent": "Mozilla/5.0"}, verify=False, timeout=5)
+        r = requests.get(url, headers=headers, verify=False, timeout=5)
         if r.status_code == 200:
-            d = r.json(); s = d.get('sidlo', {})
-            adr = s.get('textovaAdresa', f"{s.get('nazevUlice','')} {s.get('cisloDomovni','')}/{s.get('cisloOrientacni','')}, {s.get('psc','')} {s.get('nazevObce','')}".strip(' ,/'))
-            return {"jmeno": d.get('obchodniJmeno', ''), "adresa": adr, "ico": ico, "dic": d.get('dic', '')}
-    except: pass
+            data = r.json()
+            # Zpracování adresy
+            sidlo = data.get('sidlo', {})
+            ulice = sidlo.get('nazevUlice', '')
+            cislo_dom = sidlo.get('cisloDomovni')
+            cislo_or = sidlo.get('cisloOrientacni')
+            obec = sidlo.get('nazevObce', '')
+            psc = sidlo.get('psc', '')
+            
+            cislo_txt = str(cislo_dom) if cislo_dom else ""
+            if cislo_or: cislo_txt += f"/{cislo_or}"
+            
+            # Sestavení adresy: Ulice 123, 11000 Město
+            adr_parts = []
+            if ulice: adr_parts.append(f"{ulice} {cislo_txt}".strip())
+            elif cislo_txt and obec: adr_parts.append(f"{obec} {cislo_txt}") # Pro malé obce bez ulic
+            
+            if psc and obec: adr_parts.append(f"{psc} {obec}")
+            
+            plna_adresa = ", ".join(adr_parts)
+            if not plna_adresa: plna_adresa = sidlo.get('textovaAdresa', '')
+
+            return {
+                "jmeno": data.get('obchodniJmeno', ''),
+                "adresa": plna_adresa,
+                "ico": ico,
+                "dic": data.get('dic', '')
+            }
+    except Exception as e:
+        print(f"ARES Error: {e}")
     return None
 
 def process_logo(uploaded_file):
@@ -605,13 +580,20 @@ else:
                 st.success("Uloženo"); st.rerun()
         vydaje = pd.read_sql("SELECT * FROM vydaje WHERE user_id=? ORDER BY datum DESC", get_db(), params=(uid,))
         if not vydaje.empty:
-            st.dataframe(vydaje[['datum', 'popis', 'kategorie', 'castka']], use_container_width=True)
+            st.dataframe(vydaje[['id', 'datum', 'popis', 'kategorie', 'castka']], hide_index=True, use_container_width=True)
             celkem_vydaje = vydaje['castka'].sum()
             celkem_prijmy = run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=?", (uid,), True)[0] or 0
             c1, c2, c3 = st.columns(3)
             c1.metric("Příjmy", f"{celkem_prijmy:,.0f} Kč"); c2.metric("Výdaje", f"{celkem_vydaje:,.0f} Kč", delta=-celkem_vydaje); c3.metric("Hrubý zisk", f"{celkem_prijmy - celkem_vydaje:,.0f} Kč")
-            del_id = st.number_input("ID výdaje ke smazání", min_value=1)
-            if st.button("Smazat výdaj"): run_command("DELETE FROM vydaje WHERE id=? AND user_id=?", (del_id, uid)); st.rerun()
+            
+            # Opravené mazání pomocí Selectboxu
+            vydaj_list = vydaje.apply(lambda x: f"ID {x['id']}: {x['datum']} - {x['popis']} ({x['castka']} Kč)", axis=1).tolist()
+            if vydaj_list:
+                sel_del = st.selectbox("Vyberte výdaj ke smazání", vydaj_list)
+                if st.button("Smazat označený výdaj"):
+                    del_id = int(sel_del.split(":")[0].replace("ID ", ""))
+                    run_command("DELETE FROM vydaje WHERE id=? AND user_id=?", (del_id, uid))
+                    st.rerun()
 
     elif "Klienti" in menu:
         st.header("Klienti")
