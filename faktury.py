@@ -121,8 +121,9 @@ def init_db():
     except: pass
     conn.commit(); conn.close()
 
-if 'db_inited' not in st.session_state:
-    init_db(); st.session_state.db_inited = True
+# if 'db_inited' not in st.session_state:  <-- TOTO ZAKOMENTOVAT NEBO SMAZAT
+init_db()  # <-- TOTO SPUSTIT VŽDY
+st.session_state.db_inited = True
 
 # --- 3. POMOCNÉ FUNKCE ---
 def hash_password(password): return hashlib.sha256(str.encode(password)).hexdigest()
