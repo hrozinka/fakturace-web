@@ -47,42 +47,100 @@ SYSTEM_EMAIL = {
 DB_FILE = 'fakturace_v47_final.db' 
 FONT_FILE = 'arial.ttf' 
 
-# --- 1. DESIGN ---
-st.set_page_config(page_title="Fakturace Pro v5.3", page_icon="💎", layout="wide") # Layout wide pro hezčí dashboard
+# --- 1. DESIGN (OPRAVENO PRO MOBILY) ---
+st.set_page_config(page_title="Fakturace Pro v5.4", page_icon="💎", layout="wide")
 
 st.markdown("""
     <style>
+    /* 1. Hlavní pozadí a text */
     .stApp { background-color: #0f172a; color: #f8fafc; font-family: sans-serif; }
+    
+    /* 2. Vstupy (Inputy) - aby byly čitelné na mobilu */
     .stTextInput input, .stNumberInput input, .stTextArea textarea, .stDateInput input, .stSelectbox div[data-baseweb="select"] {
-        background-color: #1e293b !important; border: 1px solid #334155 !important; color: #fff !important;
-        border-radius: 12px !important; padding: 12px !important;
+        background-color: #1e293b !important; 
+        border: 1px solid #334155 !important; 
+        color: #fff !important;
+        border-radius: 12px !important; 
+        padding: 12px !important;
     }
+    
+    /* 3. OPRAVA SIDEBARU PRO SAFARI/MOBIL */
+    section[data-testid="stSidebar"] {
+        background-color: #0f172a !important; /* Tmavé pozadí natvrdo */
+    }
+    section[data-testid="stSidebar"] div, section[data-testid="stSidebar"] label, section[data-testid="stSidebar"] span, section[data-testid="stSidebar"] p {
+        color: #f8fafc !important; /* Bílé písmo natvrdo */
+    }
+    
+    /* Styl rádio tlačítek v menu */
     section[data-testid="stSidebar"] .stRadio label {
-        background-color: #1e293b !important; padding: 20px !important; margin-bottom: 10px !important;
-        border-radius: 12px !important; border: 1px solid #334155 !important;
-        color: #e2e8f0 !important; font-weight: 600 !important; font-size: 18px !important;
-        display: flex; justify-content: flex-start; cursor: pointer;
+        background-color: #1e293b !important; 
+        padding: 15px !important; 
+        margin-bottom: 8px !important;
+        border-radius: 10px !important; 
+        border: 1px solid #334155 !important;
+        font-weight: 600 !important; 
+        font-size: 16px !important;
+        display: flex; 
+        justify-content: flex-start; 
+        cursor: pointer;
     }
     section[data-testid="stSidebar"] .stRadio label[data-checked="true"] {
         background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%) !important;
-        color: #0f172a !important; border: none !important; font-weight: 800 !important;
+        color: #0f172a !important; 
+        border: none !important; 
+        font-weight: 800 !important;
     }
-    /* Hlavní stat boxy */
-    .stat-container { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+
+    /* 4. STATISTICKÉ BOXY - RESPONSIVNÍ DESIGN */
+    .stat-container { 
+        display: flex; 
+        gap: 10px; 
+        margin-bottom: 20px; 
+        flex-wrap: wrap; 
+        justify-content: space-between;
+    }
+    
     .stat-box { 
-        background: #1e293b; border-radius: 12px; padding: 15px; flex: 1; min-width: 100px;
-        text-align: center; border: 1px solid #334155; box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        background: #1e293b; 
+        border-radius: 12px; 
+        padding: 15px; 
+        flex: 1; 
+        min-width: 140px; /* Aby se na PC nesmrskly moc */
+        text-align: center; 
+        border: 1px solid #334155; 
+        box-shadow: 0 4px 6px rgba(0,0,0,0.2);
     }
-    /* NOVÉ: Menší stat boxy pro klienta */
+
     .mini-stat-box {
-        background: #334155; border-radius: 8px; padding: 10px; flex: 1; min-width: 80px;
-        text-align: center; border: 1px solid #475569; margin-bottom: 10px;
+        background: #334155; 
+        border-radius: 8px; 
+        padding: 10px; 
+        flex: 1; 
+        min-width: 100px;
+        text-align: center; 
+        border: 1px solid #475569; 
+        margin-bottom: 5px;
     }
+
+    /* 5. MOBILNÍ ÚPRAVY (Media Query) */
+    @media only screen and (max-width: 768px) {
+        .stat-box, .mini-stat-box {
+            min-width: 100% !important; /* Na mobilu přes celou šířku */
+            margin-bottom: 10px;
+        }
+        .stat-container {
+            flex-direction: column; /* Pod sebe */
+        }
+    }
+
     .stat-label { font-size: 11px; text-transform: uppercase; color: #94a3b8; margin-bottom: 5px; font-weight: 700; }
     .stat-value { font-size: 20px; font-weight: 800; color: #fff; }
     .mini-value { font-size: 16px; font-weight: 700; color: #e2e8f0; }
     
     .text-green { color: #34d399 !important; } .text-red { color: #f87171 !important; } .text-gold { color: #fbbf24 !important; }
+    
+    /* Tlačítka */
     .stButton > button { background-color: #334155 !important; color: white !important; border-radius: 10px !important; height: 50px; font-weight: 600; border: none;}
     div[data-testid="stForm"] button[kind="primary"] { background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%) !important; color: #0f172a !important; }
     div[data-testid="stExpander"] { background-color: #1e293b !important; border: 1px solid #334155 !important; border-radius: 12px !important; }
@@ -448,21 +506,14 @@ else:
             db_years = [y[0] for y in run_query("SELECT DISTINCT strftime('%Y', datum_vystaveni) FROM faktury WHERE user_id=?", (uid,))]
             sel_yf = st.selectbox("Filtr Rok", ["Všechny"] + sorted(db_years, reverse=True))
 
-            # --- NOVÉ: DETAILNÍ STATISTIKY KLIENTA ---
             if sel_cli != "Všichni":
-                # Celkový obrat
                 cl_all = run_query("SELECT SUM(f.castka_celkem) FROM faktury f JOIN klienti k ON f.klient_id=k.id WHERE f.user_id=? AND k.jmeno=?", (uid, sel_cli), True)[0] or 0
-                # Nezaplaceno
                 cl_due = run_query("SELECT SUM(f.castka_celkem) FROM faktury f JOIN klienti k ON f.klient_id=k.id WHERE f.user_id=? AND k.jmeno=? AND f.uhrazeno=0", (uid, sel_cli), True)[0] or 0
-                
                 cols = st.columns(3)
                 cols[0].markdown(f"<div class='mini-stat-box'><div class='stat-label'>CELKEM (HISTORIE)</div><div class='mini-value'>{cl_all:,.0f} Kč</div></div>", unsafe_allow_html=True)
-                
-                # Pokud je vybrán rok, ukážeme obrat v roce
                 if sel_yf != "Všechny":
                     cl_yr = run_query("SELECT SUM(f.castka_celkem) FROM faktury f JOIN klienti k ON f.klient_id=k.id WHERE f.user_id=? AND k.jmeno=? AND strftime('%Y', f.datum_vystaveni)=?", (uid, sel_cli, sel_yf), True)[0] or 0
                     cols[1].markdown(f"<div class='mini-stat-box'><div class='stat-label'>OBRAT {sel_yf}</div><div class='mini-value text-green'>{cl_yr:,.0f} Kč</div></div>", unsafe_allow_html=True)
-                
                 cols[2].markdown(f"<div class='mini-stat-box'><div class='stat-label'>DLUŽÍ</div><div class='mini-value text-red'>{cl_due:,.0f} Kč</div></div>", unsafe_allow_html=True)
 
             q = "SELECT f.*, k.jmeno FROM faktury f JOIN klienti k ON f.klient_id=k.id WHERE f.user_id=?"; p = [uid]
@@ -480,8 +531,7 @@ else:
                         if c1.button("Zaplaceno", key=f"u1_{row['id']}"): run_command("UPDATE faktury SET uhrazeno=1 WHERE id=?",(row['id'],)); st.rerun()
                     
                     pdf_output = generate_pdf(row['id'], uid, is_pro)
-                    if isinstance(pdf_output, bytes):
-                        c2.download_button("PDF", pdf_output, f"{cf}.pdf", "application/pdf", key=f"pd_{row['id']}")
+                    if isinstance(pdf_output, bytes): c2.download_button("PDF", pdf_output, f"{cf}.pdf", "application/pdf", key=f"pd_{row['id']}")
                     
                     if is_pro:
                         isdoc_bytes = generate_isdoc(row['id'], uid)
@@ -515,55 +565,33 @@ else:
 
                     if st.button("Smazat", key=f"bd_{row['id']}"): run_command("DELETE FROM faktury WHERE id=?",(row['id'],)); st.rerun()
         
-        # --- NOVÝ MODERNÍ DASHBOARD ---
         with t2:
             st.markdown("### 🚀 Přehled podnikání")
-            
-            # 1. Hlavní metriky
             tot_rev = run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=?", (uid,), True)[0] or 0
             tot_paid = run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=? AND uhrazeno=1", (uid,), True)[0] or 0
             tot_due = run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=? AND uhrazeno=0", (uid,), True)[0] or 0
             count_inv = run_query("SELECT COUNT(*) FROM faktury WHERE user_id=?", (uid,), True)[0] or 0
-            
             mc1, mc2, mc3, mc4 = st.columns(4)
-            mc1.metric("Celkem vystaveno", f"{tot_rev:,.0f} Kč")
-            mc2.metric("Zaplaceno", f"{tot_paid:,.0f} Kč", delta=f"{int(tot_paid/tot_rev*100) if tot_rev else 0} %")
-            mc3.metric("Dluží klienti", f"{tot_due:,.0f} Kč", delta="-", delta_color="inverse")
-            mc4.metric("Počet faktur", count_inv)
-            
+            mc1.metric("Celkem vystaveno", f"{tot_rev:,.0f} Kč"); mc2.metric("Zaplaceno", f"{tot_paid:,.0f} Kč", delta=f"{int(tot_paid/tot_rev*100) if tot_rev else 0} %"); mc3.metric("Dluží klienti", f"{tot_due:,.0f} Kč", delta="-", delta_color="inverse"); mc4.metric("Počet faktur", count_inv)
             st.divider()
-            
-            # 2. Grafy ve dvou sloupcích
             gc1, gc2 = st.columns([2, 1])
-            
             with gc1:
                 st.subheader("📈 Vývoj v čase")
                 df_g = pd.read_sql("SELECT datum_vystaveni, castka_celkem FROM faktury WHERE user_id=?", get_db(), params=(uid,))
                 if not df_g.empty:
                     df_g['datum'] = pd.to_datetime(df_g['datum_vystaveni'])
-                    # Seskupení po měsících
                     monthly = df_g.groupby(df_g['datum'].dt.to_period('M'))['castka_celkem'].sum()
                     monthly.index = monthly.index.astype(str)
                     st.bar_chart(monthly, color="#fbbf24")
-                else:
-                    st.info("Zatím žádná data.")
-
+                else: st.info("Zatím žádná data.")
             with gc2:
                 st.subheader("🏆 TOP 5 Klientů")
                 df_top = pd.read_sql("SELECT k.jmeno, SUM(f.castka_celkem) as celkem FROM faktury f JOIN klienti k ON f.klient_id=k.id WHERE f.user_id=? GROUP BY k.jmeno ORDER BY celkem DESC LIMIT 5", get_db(), params=(uid,))
-                if not df_top.empty:
-                    st.dataframe(
-                        df_top.set_index('jmeno').style.format("{:,.0f} Kč"),
-                        use_container_width=True
-                    )
-                else:
-                    st.info("Žádní klienti.")
-
-            # 3. Koláč kategorií
+                if not df_top.empty: st.dataframe(df_top.set_index('jmeno').style.format("{:,.0f} Kč"), use_container_width=True)
+                else: st.info("Žádní klienti.")
             st.subheader("🍰 Příjmy dle kategorií")
             df_c = pd.read_sql("SELECT k.nazev, SUM(f.castka_celkem) as celkem FROM faktury f JOIN kategorie k ON f.kategorie_id=k.id WHERE f.user_id=? GROUP BY k.nazev", get_db(), params=(uid,))
-            if not df_c.empty:
-                st.bar_chart(df_c.set_index('nazev'))
+            if not df_c.empty: st.bar_chart(df_c.set_index('nazev'))
 
     elif "Výdaje" in menu:
         st.header("💸 Evidence výdajů")
@@ -575,7 +603,6 @@ else:
             if st.form_submit_button("Uložit výdaj"):
                 run_command("INSERT INTO vydaje (user_id, datum, popis, castka, kategorie) VALUES (?,?,?,?,?)", (uid, ex_date, ex_desc, ex_amt, ex_cat))
                 st.success("Uloženo"); st.rerun()
-        
         vydaje = pd.read_sql("SELECT * FROM vydaje WHERE user_id=? ORDER BY datum DESC", get_db(), params=(uid,))
         if not vydaje.empty:
             st.dataframe(vydaje[['datum', 'popis', 'kategorie', 'castka']], use_container_width=True)
