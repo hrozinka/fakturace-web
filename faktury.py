@@ -48,19 +48,19 @@ SYSTEM_EMAIL = {
 DB_FILE = 'fakturace_v47_final.db' 
 FONT_FILE = 'arial.ttf' 
 
-# --- 1. DESIGN (MODERNÍ + FIX PRO MOBILY) ---
-st.set_page_config(page_title="Fakturace Pro v5.13", page_icon="💎", layout="centered")
+# --- 1. DESIGN (MODERNÍ + FIX PRO MOBILY A DROPDOWNY) ---
+st.set_page_config(page_title="Fakturace Pro v5.14", page_icon="💎", layout="centered")
 
 st.markdown("""
     <style>
-    /* 1. GLOBÁLNÍ VYNUCENÍ BAREV (Fix pro Safari/Mobile) */
+    /* 1. GLOBÁLNÍ VYNUCENÍ BAREV */
     .stApp { 
         background-color: #0f172a !important; 
         color: #f8fafc !important; 
         font-family: sans-serif; 
     }
     
-    /* Vynucení bílého textu pro všechny běžné elementy */
+    /* Vynucení bílého textu */
     h1, h2, h3, h4, h5, h6, p, label, span, div, li {
         color: #f8fafc !important;
     }
@@ -73,25 +73,52 @@ st.markdown("""
         border-radius: 12px !important; 
         padding: 12px !important;
     }
-    /* Placeholder text */
     ::placeholder { color: #94a3b8 !important; opacity: 1; }
 
-    /* 3. ZÁLOŽKY (Tabs) - Přihlášení/Registrace */
-    button[data-baseweb="tab"] {
-        background-color: transparent !important;
-    }
-    button[data-baseweb="tab"] div p {
-        color: #94a3b8 !important; /* Neaktivní tab - šedá */
-        font-weight: 600;
-    }
-    button[data-baseweb="tab"][aria-selected="true"] div p {
-        color: #fbbf24 !important; /* Aktivní tab - zlatá */
+    /* --- 3. FIX PRO ROLOVACÍ NABÍDKY A KALENDÁŘE (To byl ten problém) --- */
+    
+    /* Pozadí vyskakovacího menu (Dropdown) */
+    div[data-baseweb="popover"], div[data-baseweb="menu"], ul[data-baseweb="menu"] {
+        background-color: #1e293b !important;
+        border: 1px solid #334155 !important;
     }
     
-    /* 4. SIDEBAR */
+    /* Jednotlivé položky v menu */
+    li[data-baseweb="option"] {
+        color: #fff !important; /* Bílý text */
+    }
+    
+    /* Hover efekt v menu (aby bylo vidět, na co klikám) */
+    li[data-baseweb="option"]:hover, li[role="option"][aria-selected="true"] {
+        background-color: #334155 !important;
+    }
+
+    /* Kalendář (Date Input) - vnitřek */
+    div[data-baseweb="calendar"] {
+        background-color: #1e293b !important;
+        color: #fff !important;
+    }
+    div[data-baseweb="calendar"] button {
+        background-color: transparent !important;
+        color: #fff !important;
+    }
+    /* Dny v měsíci */
+    div[data-baseweb="calendar"] div[aria-label] {
+        color: #fff !important;
+    }
+    div[data-baseweb="calendar"] div[aria-label]:hover {
+        background-color: #fbbf24 !important;
+        color: #000 !important;
+    }
+
+    /* 4. ZÁLOŽKY (Tabs) */
+    button[data-baseweb="tab"] { background-color: transparent !important; }
+    button[data-baseweb="tab"] div p { color: #94a3b8 !important; font-weight: 600; }
+    button[data-baseweb="tab"][aria-selected="true"] div p { color: #fbbf24 !important; }
+    
+    /* 5. SIDEBAR */
     section[data-testid="stSidebar"] { background-color: #0f172a !important; }
     
-    /* Tlačítka v menu - STEJNÁ ŠÍŘKA */
     section[data-testid="stSidebar"] .stRadio label {
         background-color: #1e293b !important; 
         padding: 15px !important; 
@@ -112,12 +139,11 @@ st.markdown("""
         border: none !important; 
         font-weight: 800 !important;
     }
-    /* Uvnitř aktivního tlačítka v menu musí být text tmavý */
     section[data-testid="stSidebar"] .stRadio label[data-checked="true"] p {
         color: #0f172a !important;
     }
 
-    /* 5. TLAČÍTKA (Buttons) */
+    /* 6. TLAČÍTKA */
     .stButton > button, [data-testid="stDownloadButton"] > button {
         background-color: #334155 !important; 
         color: #ffffff !important; 
@@ -136,12 +162,11 @@ st.markdown("""
         color: #0f172a !important; 
         border: none !important; 
     }
-    /* Text uvnitř primárního tlačítka musí být tmavý */
     div[data-testid="stForm"] button[kind="primary"] p {
         color: #0f172a !important;
     }
 
-    /* 6. STATISTICKÉ BOXY (DASHBOARD) */
+    /* 7. STATISTIKY */
     .stat-container { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; justify-content: space-between; }
     .stat-box { 
         background: #1e293b; border-radius: 12px; padding: 15px; flex: 1; 
@@ -158,7 +183,6 @@ st.markdown("""
         .stat-container { flex-direction: column; }
     }
 
-    /* Specifické barvy čísel (musí přebít globální nastavení) */
     .text-green, .text-green span { color: #34d399 !important; } 
     .text-red, .text-red span { color: #f87171 !important; } 
     .text-gold, .text-gold span { color: #fbbf24 !important; }
@@ -166,17 +190,18 @@ st.markdown("""
     .stat-label { font-size: 11px; text-transform: uppercase; color: #94a3b8 !important; margin-bottom: 5px; font-weight: 700; }
     .stat-value { font-size: 20px; font-weight: 800; color: #fff !important; }
     
-    /* 7. OSTATNÍ KOMPONENTY */
     div[data-testid="stExpander"] { 
         background-color: #1e293b !important; 
         border: 1px solid #334155 !important; 
         border-radius: 12px !important; 
     }
     
-    /* Login Page Styling */
     .login-header { font-size: 32px; font-weight: 700; color: #f8fafc !important; margin-bottom: 10px; }
     .login-sub { color: #94a3b8 !important; margin-bottom: 30px; }
     .login-container { text-align: center; padding: 20px; }
+    
+    /* DAŇOVÝ BOX */
+    .tax-box { background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border: 1px solid #fbbf24; border-radius: 15px; padding: 20px; margin-bottom: 20px; text-align: center; }
     </style>
 """, unsafe_allow_html=True)
 
