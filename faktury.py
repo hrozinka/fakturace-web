@@ -48,41 +48,49 @@ DB_FILE = 'fakturace_v47_final.db'
 FONT_FILE = 'arial.ttf' 
 
 # --- 1. DESIGN ---
-st.set_page_config(page_title="Fakturace Pro v5.6", page_icon="💎", layout="wide")
+st.set_page_config(page_title="Fakturace Pro v5.7", page_icon="💎", layout="wide")
 
 st.markdown("""
     <style>
+    /* 1. Hlavní pozadí a text */
     .stApp { background-color: #0f172a !important; color: #f8fafc !important; font-family: sans-serif; }
+    
+    /* 2. Vstupy */
     .stTextInput input, .stNumberInput input, .stTextArea textarea, .stDateInput input, .stSelectbox div[data-baseweb="select"] {
-        background-color: #1e293b !important; border: 1px solid #334155 !important; color: #fff !important;
-        border-radius: 12px !important; padding: 12px !important;
+        background-color: #1e293b !important; border: 1px solid #334155 !important; color: #fff !important; border-radius: 12px !important; padding: 12px !important;
     }
+    
+    /* 3. SIDEBAR */
     section[data-testid="stSidebar"] { background-color: #0f172a !important; }
     section[data-testid="stSidebar"] div, section[data-testid="stSidebar"] label, section[data-testid="stSidebar"] span, section[data-testid="stSidebar"] p { color: #f8fafc !important; }
     
     section[data-testid="stSidebar"] .stRadio label {
         background-color: #1e293b !important; padding: 15px !important; margin-bottom: 8px !important;
         border-radius: 10px !important; border: 1px solid #334155 !important;
-        font-weight: 600 !important; font-size: 16px !important; display: flex; justify-content: flex-start; cursor: pointer;
-        width: 100% !important; box-sizing: border-box !important;
+        font-weight: 600 !important; font-size: 16px !important; display: flex; justify-content: flex-start; cursor: pointer; width: 100% !important; box-sizing: border-box !important;
     }
     section[data-testid="stSidebar"] .stRadio label[data-checked="true"] {
         background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%) !important; color: #0f172a !important; border: none !important; font-weight: 800 !important;
     }
+
+    /* 4. TLAČÍTKA */
     .stButton > button, [data-testid="stDownloadButton"] > button {
         background-color: #334155 !important; color: #ffffff !important; border-radius: 10px !important; height: 50px; font-weight: 600; border: 1px solid #475569 !important; width: 100%;
     }
     .stButton > button:hover, [data-testid="stDownloadButton"] > button:hover { border-color: #fbbf24 !important; color: #fbbf24 !important; }
     div[data-testid="stForm"] button[kind="primary"] { background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%) !important; color: #0f172a !important; border: none !important; }
-    
+
+    /* 5. STATISTICKÉ BOXY */
     .stat-container { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; justify-content: space-between; }
     .stat-box { background: #1e293b; border-radius: 12px; padding: 15px; flex: 1; min-width: 140px; text-align: center; border: 1px solid #334155; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
     .mini-stat-box { background: #334155; border-radius: 8px; padding: 10px; flex: 1; min-width: 100px; text-align: center; border: 1px solid #475569; margin-bottom: 5px; }
-    
+
+    /* 6. MOBILNÍ ÚPRAVY */
     @media only screen and (max-width: 768px) {
         .stat-box, .mini-stat-box { min-width: 100% !important; margin-bottom: 10px; }
         .stat-container { flex-direction: column; }
     }
+
     .stat-label { font-size: 11px; text-transform: uppercase; color: #94a3b8; margin-bottom: 5px; font-weight: 700; }
     .stat-value { font-size: 20px; font-weight: 800; color: #fff; }
     .mini-value { font-size: 16px; font-weight: 700; color: #e2e8f0; }
@@ -153,20 +161,34 @@ def get_next_invoice_number(kat_id, uid):
     if res: return (res['aktualni_cislo'], f"{res['prefix']}{res['aktualni_cislo']}", res['prefix'])
     return (1, "1", "")
 
-# --- NOVÁ FUNKCE ARES (MODIFIKOVANÁ) ---
+# --- IMPLEMENTACE VAŠEHO ARES KÓDU ---
 def get_ares_data(ico):
-    import urllib3; urllib3.disable_warnings()
-    if not ico: return None
+    """
+    Načte data z ARES podle IČO
+    """
+    import urllib3
+    urllib3.disable_warnings()
+    
+    if not ico:
+        return None
+    
+    # Očištění a formátování IČO na 8 číslic
     ico = "".join(filter(str.isdigit, str(ico))).zfill(8)
     
-    url = f"https://ares.gov.cz/ekonomicke-subjekty/v-1/ekonomicke-subjekty/{ico}"
-    headers = {"accept": "application/json", "User-Agent": "Mozilla/5.0"}
+    # Správná URL ARES API
+    url = f"https://ares.gov.cz/ekonomicke-subjekty-v-be/rest/ekonomicke-subjekty/{ico}"
+    headers = {
+        "accept": "application/json",
+        "User-Agent": "Mozilla/5.0"
+    }
     
     try:
         r = requests.get(url, headers=headers, verify=False, timeout=5)
+        
         if r.status_code == 200:
             data = r.json()
-            # Zpracování adresy
+            
+            # Zpracování sídla
             sidlo = data.get('sidlo', {})
             ulice = sidlo.get('nazevUlice', '')
             cislo_dom = sidlo.get('cisloDomovni')
@@ -174,27 +196,44 @@ def get_ares_data(ico):
             obec = sidlo.get('nazevObce', '')
             psc = sidlo.get('psc', '')
             
+            # Sestavení čísla domu
             cislo_txt = str(cislo_dom) if cislo_dom else ""
-            if cislo_or: cislo_txt += f"/{cislo_or}"
+            if cislo_or:
+                cislo_txt += f"/{cislo_or}"
             
-            # Sestavení adresy: Ulice 123, 11000 Město
+            # Sestavení adresy
             adr_parts = []
-            if ulice: adr_parts.append(f"{ulice} {cislo_txt}".strip())
-            elif cislo_txt and obec: adr_parts.append(f"{obec} {cislo_txt}") # Pro malé obce bez ulic
+            if ulice:
+                adr_parts.append(f"{ulice} {cislo_txt}".strip())
+            elif cislo_txt and obec:
+                adr_parts.append(f"{obec} {cislo_txt}")
             
-            if psc and obec: adr_parts.append(f"{psc} {obec}")
+            if psc and obec:
+                adr_parts.append(f"{psc} {obec}")
             
             plna_adresa = ", ".join(adr_parts)
-            if not plna_adresa: plna_adresa = sidlo.get('textovaAdresa', '')
-
+            
+            # Fallback na textovou adresu z API
+            if not plna_adresa:
+                plna_adresa = sidlo.get('textovaAdresa', '')
+            
+            # DIČ může být v různých formátech
+            dic = data.get('dic', '')
+            if not dic:
+                dic = data.get('dicId', '')
+            
             return {
                 "jmeno": data.get('obchodniJmeno', ''),
                 "adresa": plna_adresa,
                 "ico": ico,
-                "dic": data.get('dic', '')
+                "dic": dic
             }
+        else:
+            print(f"ARES HTTP Error: {r.status_code}")
+            
     except Exception as e:
         print(f"ARES Error: {e}")
+    
     return None
 
 def process_logo(uploaded_file):
@@ -586,7 +625,6 @@ else:
             c1, c2, c3 = st.columns(3)
             c1.metric("Příjmy", f"{celkem_prijmy:,.0f} Kč"); c2.metric("Výdaje", f"{celkem_vydaje:,.0f} Kč", delta=-celkem_vydaje); c3.metric("Hrubý zisk", f"{celkem_prijmy - celkem_vydaje:,.0f} Kč")
             
-            # Opravené mazání pomocí Selectboxu
             vydaj_list = vydaje.apply(lambda x: f"ID {x['id']}: {x['datum']} - {x['popis']} ({x['castka']} Kč)", axis=1).tolist()
             if vydaj_list:
                 sel_del = st.selectbox("Vyberte výdaj ke smazání", vydaj_list)
