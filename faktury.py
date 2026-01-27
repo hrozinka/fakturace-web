@@ -34,7 +34,7 @@ except Exception:
     admin_pass_init = os.getenv("ADMIN_INIT_PASS")
     email_pass = os.getenv("EMAIL_PASSWORD", "")
 
-# 3. Pokud heslo stále nemáme, zastavíme aplikaci (ŽÁDNÁ ZADNÍ VRÁTKA)
+# 3. Pokud heslo stále nemáme, zastavíme aplikaci
 if not admin_pass_init:
     st.error("⛔ CHYBA BEZPEČNOSTI: Není nastaveno heslo ADMIN_INIT_PASS v secrets.toml!")
     st.stop()
@@ -52,54 +52,50 @@ DB_FILE = 'fakturace_v47_final.db'
 FONT_FILE = 'arial.ttf' 
 
 # --- 1. DESIGN ---
-st.set_page_config(page_title="Fakturace Pro v5.8", page_icon="💎", layout="wide")
+st.set_page_config(page_title="Fakturace Pro v5.9", page_icon="💎", layout="wide")
 
 st.markdown("""
     <style>
-    /* 1. Hlavní pozadí a text */
     .stApp { background-color: #0f172a !important; color: #f8fafc !important; font-family: sans-serif; }
-    
-    /* 2. Vstupy */
     .stTextInput input, .stNumberInput input, .stTextArea textarea, .stDateInput input, .stSelectbox div[data-baseweb="select"] {
-        background-color: #1e293b !important; border: 1px solid #334155 !important; color: #fff !important; border-radius: 12px !important; padding: 12px !important;
+        background-color: #1e293b !important; border: 1px solid #334155 !important; color: #fff !important;
+        border-radius: 12px !important; padding: 12px !important;
     }
-    
-    /* 3. SIDEBAR */
     section[data-testid="stSidebar"] { background-color: #0f172a !important; }
     section[data-testid="stSidebar"] div, section[data-testid="stSidebar"] label, section[data-testid="stSidebar"] span, section[data-testid="stSidebar"] p { color: #f8fafc !important; }
     
     section[data-testid="stSidebar"] .stRadio label {
         background-color: #1e293b !important; padding: 15px !important; margin-bottom: 8px !important;
         border-radius: 10px !important; border: 1px solid #334155 !important;
-        font-weight: 600 !important; font-size: 16px !important; display: flex; justify-content: flex-start; cursor: pointer; width: 100% !important; box-sizing: border-box !important;
+        font-weight: 600 !important; font-size: 16px !important; display: flex; justify-content: flex-start; cursor: pointer;
+        width: 100% !important; box-sizing: border-box !important;
     }
     section[data-testid="stSidebar"] .stRadio label[data-checked="true"] {
         background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%) !important; color: #0f172a !important; border: none !important; font-weight: 800 !important;
     }
-
-    /* 4. TLAČÍTKA */
     .stButton > button, [data-testid="stDownloadButton"] > button {
         background-color: #334155 !important; color: #ffffff !important; border-radius: 10px !important; height: 50px; font-weight: 600; border: 1px solid #475569 !important; width: 100%;
     }
     .stButton > button:hover, [data-testid="stDownloadButton"] > button:hover { border-color: #fbbf24 !important; color: #fbbf24 !important; }
     div[data-testid="stForm"] button[kind="primary"] { background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%) !important; color: #0f172a !important; border: none !important; }
-
-    /* 5. STATISTICKÉ BOXY */
+    
     .stat-container { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; justify-content: space-between; }
     .stat-box { background: #1e293b; border-radius: 12px; padding: 15px; flex: 1; min-width: 140px; text-align: center; border: 1px solid #334155; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
     .mini-stat-box { background: #334155; border-radius: 8px; padding: 10px; flex: 1; min-width: 100px; text-align: center; border: 1px solid #475569; margin-bottom: 5px; }
-
-    /* 6. MOBILNÍ ÚPRAVY */
+    
     @media only screen and (max-width: 768px) {
         .stat-box, .mini-stat-box { min-width: 100% !important; margin-bottom: 10px; }
         .stat-container { flex-direction: column; }
     }
-
     .stat-label { font-size: 11px; text-transform: uppercase; color: #94a3b8; margin-bottom: 5px; font-weight: 700; }
     .stat-value { font-size: 20px; font-weight: 800; color: #fff; }
     .mini-value { font-size: 16px; font-weight: 700; color: #e2e8f0; }
     .text-green { color: #34d399 !important; } .text-red { color: #f87171 !important; } .text-gold { color: #fbbf24 !important; }
     div[data-testid="stExpander"] { background-color: #1e293b !important; border: 1px solid #334155 !important; border-radius: 12px !important; }
+    
+    /* PRO/FREE Badge v adminu */
+    .badge-admin-pro { background-color: #34d399; color: #064e3b; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; }
+    .badge-admin-free { background-color: #94a3b8; color: #1e293b; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -136,15 +132,13 @@ def init_db():
     try: c.execute("INSERT OR IGNORE INTO email_templates (name, subject, body) VALUES ('welcome', 'Vítejte ve vašem fakturačním systému', 'Dobrý den {name},\n\nVáš účet byl úspěšně vytvořen.\n\nS pozdravem,\nTým MojeFakturace')")
     except: pass
     
-    # --- OPRAVA: SYNCHRONIZACE HESLA ADMINA ---
+    # --- OPRAVA: SYNCHRONIZACE HESLA ADMINA (NUCENÁ AKTUALIZACE) ---
     try:
         adm_hash = hashlib.sha256(str.encode(admin_pass_init)).hexdigest()
-        # Použijeme ON CONFLICT pro aktualizaci hesla, pokud uživatel 'admin' už existuje
-        c.execute("""
-            INSERT INTO users (username, password_hash, role, full_name, email, phone, created_at) 
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(username) DO UPDATE SET password_hash=excluded.password_hash
-        """, ("admin", adm_hash, "admin", "Super Admin", "admin@system.cz", "000000000", datetime.now().isoformat()))
+        # Vložení admina, pokud neexistuje
+        c.execute("INSERT OR IGNORE INTO users (username, password_hash, role, full_name, email, phone, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)", ("admin", adm_hash, "admin", "Super Admin", "admin@system.cz", "000000000", datetime.now().isoformat()))
+        # VYNUCENÁ aktualizace hesla podle secrets.toml (pro případ, že uživatel už existuje se starým heslem)
+        c.execute("UPDATE users SET password_hash=? WHERE username='admin'", (adm_hash,))
     except Exception as e: 
         print(f"Chyba admin sync: {e}")
     
@@ -422,54 +416,81 @@ if role == 'admin':
     c4.metric("Průměrná faktura", f"{avg_f:,.0f} Kč")
     
     st.divider()
-    st.subheader("📋 Seznam uživatelů")
     
-    # Komplexní dotaz pro tabulku
-    users_df = pd.read_sql("""
-        SELECT u.id, u.username, u.full_name, u.email, u.phone, u.created_at, u.last_active, 
-               u.license_valid_until,
-               (SELECT COUNT(*) FROM faktury WHERE user_id = u.id) as faktur,
-               (SELECT SUM(castka_celkem) FROM faktury WHERE user_id = u.id) as obrat
-        FROM users u 
-        WHERE u.role != 'admin'
-        ORDER BY u.id DESC
-    """, get_db())
+    tabs = st.tabs(["Uživatelé & Licence", "Generátor klíčů", "📧 E-mailing"])
     
-    if not users_df.empty:
-        st.dataframe(users_df, use_container_width=True)
-    else:
-        st.info("Žádní uživatelé.")
+    with tabs[0]:
+        st.subheader("📋 Seznam uživatelů")
+        # Výpis pro přehled
+        for u in run_query("SELECT * FROM users WHERE role!='admin' ORDER BY id DESC"):
+            # Určení statusu
+            exp_date = u['license_valid_until']
+            is_active_lic = False
+            if exp_date:
+                try: 
+                    dobj = datetime.strptime(str(exp_date)[:10], '%Y-%m-%d').date()
+                    if dobj >= date.today(): is_active_lic = True
+                except: pass
+            
+            status_badge = "<span class='badge-admin-pro'>PRO</span>" if is_active_lic else "<span class='badge-admin-free'>FREE</span>"
+            
+            with st.expander(f"{u['username']} ({u['email']}) | {status_badge}", unsafe_allow_html=True):
+                c1, c2 = st.columns(2)
+                c1.write(f"**Jméno:** {u['full_name']}")
+                c1.write(f"**Tel:** {u['phone']}")
+                c1.write(f"**Vytvořeno:** {format_date(u['created_at'])}")
+                
+                # Editace platnosti
+                current_valid = date.today()
+                if u['license_valid_until']:
+                    try: current_valid = datetime.strptime(str(u['license_valid_until'])[:10], '%Y-%m-%d').date()
+                    except: pass
+                
+                new_valid = c2.date_input("Manuálně nastavit platnost do:", value=current_valid, key=f"md_{u['id']}")
+                if c2.button("💾 Uložit datum", key=f"bd_{u['id']}"):
+                    run_command("UPDATE users SET license_valid_until=? WHERE id=?", (new_valid, u['id']))
+                    st.success("Datum aktualizováno"); st.rerun()
 
-    st.subheader("🔑 Správa Licencí & Akce")
-    for u in run_query("SELECT * FROM users WHERE role!='admin' ORDER BY id DESC"):
-        with st.expander(f"{u['username']} ({u['email']})"):
-            c1, c2 = st.columns(2)
-            c1.write(f"**Tel:** {u['phone']}")
-            c1.write(f"**Vytvořeno:** {format_date(u['created_at'])}")
-            
-            # Licence logic
-            fk = run_query("SELECT * FROM licencni_klice WHERE pouzito_uzivatelem_id IS NULL ORDER BY id DESC")
-            key_dict = {f"{k['kod']} ({k['dny_platnosti']} dní)": k for k in fk}
-            sel_key = c2.selectbox("Přiřadit klíč", ["-- Vyberte --"] + list(key_dict.keys()), key=f"sk_{u['id']}")
-            
-            if c2.button("Aktivovat", key=f"btn_{u['id']}"):
-                if sel_key != "-- Vyberte --":
-                    k_data = key_dict[sel_key]
-                    new_exp = date.today() + timedelta(days=k_data['dny_platnosti'])
-                    run_command("UPDATE users SET license_key=?, license_valid_until=? WHERE id=?", (k_data['kod'], new_exp, u['id']))
-                    run_command("UPDATE licencni_klice SET pouzito_uzivatelem_id=? WHERE id=?", (u['id'], k_data['id']))
-                    st.success("OK"); st.rerun()
-            
-            if st.button("🗑️ Smazat uživatele", key=f"del_{u['id']}", type="primary"):
-                run_command("DELETE FROM users WHERE id=?",(u['id'],)); st.rerun()
+                # Licence logic
+                fk = run_query("SELECT * FROM licencni_klice WHERE pouzito_uzivatelem_id IS NULL ORDER BY id DESC")
+                key_dict = {f"{k['kod']} ({k['dny_platnosti']} dní)": k for k in fk}
+                sel_key = c2.selectbox("Nebo přiřadit klíč", ["-- Vyberte --"] + list(key_dict.keys()), key=f"sk_{u['id']}")
+                
+                if c2.button("Aktivovat klíčem", key=f"btn_{u['id']}"):
+                    if sel_key != "-- Vyberte --":
+                        k_data = key_dict[sel_key]
+                        new_exp = date.today() + timedelta(days=k_data['dny_platnosti'])
+                        run_command("UPDATE users SET license_key=?, license_valid_until=? WHERE id=?", (k_data['kod'], new_exp, u['id']))
+                        run_command("UPDATE licencni_klice SET pouzito_uzivatelem_id=? WHERE id=?", (u['id'], k_data['id']))
+                        st.success("Licence aktivována!"); st.rerun()
+                
+                if st.button("🗑️ Smazat uživatele", key=f"del_{u['id']}", type="primary"):
+                    run_command("DELETE FROM users WHERE id=?",(u['id'],)); st.rerun()
 
-    st.divider()
-    with st.expander("🛠️ Generátor klíčů"):
-        days = st.number_input("Dny platnosti", 365); note = st.text_input("Poznámka")
-        if st.button("Vygenerovat klíč"):
+    with tabs[1]:
+        days_val = st.number_input("Platnost (dny)", value=365, min_value=1); note_val = st.text_input("Poznámka (např. jméno firmy)")
+        if st.button("Vygenerovat nový klíč"):
             k = generate_license_key()
-            run_command("INSERT INTO licencni_klice (kod, dny_platnosti, vygenerovano, poznamka) VALUES (?,?,?,?)", (k, days, datetime.now().isoformat(), note))
-            st.success(f"Klíč: {k}")
+            run_command("INSERT INTO licencni_klice (kod, dny_platnosti, vygenerovano, poznamka) VALUES (?,?,?,?)", (k, days_val, datetime.now().isoformat(), note_val)); st.success(f"Vytvořeno: {k}")
+        for k in run_query("SELECT * FROM licencni_klice ORDER BY id DESC"): st.code(f"{k['kod']} | {k['dny_platnosti']} dní | {'🔴 Použit' if k['pouzito_uzivatelem_id'] else '🟢 Volný'} | {k['poznamka']}")
+
+    with tabs[2]:
+        st.subheader("Šablona uvítacího emailu")
+        tpl = run_query("SELECT * FROM email_templates WHERE name='welcome'", single=True); tpl_dict = dict(tpl) if tpl else {}
+        with st.form("wm"):
+            ws = st.text_input("Předmět", value=tpl_dict.get('subject', '')); wb = st.text_area("Text (použijte {name} pro jméno)", value=tpl_dict.get('body', ''), height=200)
+            if st.form_submit_button("Uložit šablonu"): 
+                run_command("INSERT OR REPLACE INTO email_templates (id, name, subject, body) VALUES ((SELECT id FROM email_templates WHERE name='welcome'), 'welcome', ?, ?)", (ws, wb)); st.success("OK")
+        
+        st.divider()
+        st.subheader("Hromadné odeslání zprávy")
+        with st.form("mm"):
+            ms = st.text_input("Předmět"); mb = st.text_area("Zpráva pro všechny uživatele", height=150)
+            if st.form_submit_button("Odeslat všem uživatelům"):
+                count = 0
+                for u in run_query("SELECT email FROM users WHERE role!='admin' AND email IS NOT NULL"): 
+                    if send_email_custom(u['email'], ms, mb): count += 1
+                st.success(f"Odesláno na {count} emailů.")
 
 # USER
 else:
