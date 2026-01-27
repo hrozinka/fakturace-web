@@ -47,15 +47,15 @@ SYSTEM_EMAIL = {
 DB_FILE = 'fakturace_v47_final.db' 
 FONT_FILE = 'arial.ttf' 
 
-# --- 1. DESIGN (OPRAVENO PRO MOBILY) ---
-st.set_page_config(page_title="Fakturace Pro v5.4", page_icon="💎", layout="wide")
+# --- 1. DESIGN (FINÁLNÍ ÚPRAVY) ---
+st.set_page_config(page_title="Fakturace Pro v5.5", page_icon="💎", layout="wide")
 
 st.markdown("""
     <style>
-    /* 1. Hlavní pozadí a text */
-    .stApp { background-color: #0f172a; color: #f8fafc; font-family: sans-serif; }
+    /* 1. Hlavní pozadí a text - Vynucení pro celou aplikaci */
+    .stApp { background-color: #0f172a !important; color: #f8fafc !important; font-family: sans-serif; }
     
-    /* 2. Vstupy (Inputy) - aby byly čitelné na mobilu */
+    /* 2. Vstupy (Inputy) */
     .stTextInput input, .stNumberInput input, .stTextArea textarea, .stDateInput input, .stSelectbox div[data-baseweb="select"] {
         background-color: #1e293b !important; 
         border: 1px solid #334155 !important; 
@@ -64,15 +64,15 @@ st.markdown("""
         padding: 12px !important;
     }
     
-    /* 3. OPRAVA SIDEBARU PRO SAFARI/MOBIL */
+    /* 3. SIDEBAR - Menu */
     section[data-testid="stSidebar"] {
-        background-color: #0f172a !important; /* Tmavé pozadí natvrdo */
+        background-color: #0f172a !important;
     }
     section[data-testid="stSidebar"] div, section[data-testid="stSidebar"] label, section[data-testid="stSidebar"] span, section[data-testid="stSidebar"] p {
-        color: #f8fafc !important; /* Bílé písmo natvrdo */
+        color: #f8fafc !important;
     }
     
-    /* Styl rádio tlačítek v menu */
+    /* Tlačítka v menu - STEJNÁ ŠÍŘKA */
     section[data-testid="stSidebar"] .stRadio label {
         background-color: #1e293b !important; 
         padding: 15px !important; 
@@ -84,6 +84,8 @@ st.markdown("""
         display: flex; 
         justify-content: flex-start; 
         cursor: pointer;
+        width: 100% !important; /* Roztažení na celou šířku */
+        box-sizing: border-box !important;
     }
     section[data-testid="stSidebar"] .stRadio label[data-checked="true"] {
         background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%) !important;
@@ -92,57 +94,55 @@ st.markdown("""
         font-weight: 800 !important;
     }
 
-    /* 4. STATISTICKÉ BOXY - RESPONSIVNÍ DESIGN */
-    .stat-container { 
-        display: flex; 
-        gap: 10px; 
-        margin-bottom: 20px; 
-        flex-wrap: wrap; 
-        justify-content: space-between;
+    /* 4. TLAČÍTKA (Včetně Download tlačítek) - Vynucení barev */
+    .stButton > button, [data-testid="stDownloadButton"] > button {
+        background-color: #334155 !important; 
+        color: #ffffff !important; /* Bílá barva textu natvrdo */
+        border-radius: 10px !important; 
+        height: 50px; 
+        font-weight: 600; 
+        border: 1px solid #475569 !important;
+        width: 100%; /* Aby tlačítka ve sloupcích vypadala hezky */
     }
     
+    /* Hover efekt pro tlačítka */
+    .stButton > button:hover, [data-testid="stDownloadButton"] > button:hover {
+        border-color: #fbbf24 !important;
+        color: #fbbf24 !important;
+    }
+
+    /* Primární tlačítka (např. formuláře) */
+    div[data-testid="stForm"] button[kind="primary"] { 
+        background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%) !important; 
+        color: #0f172a !important; 
+        border: none !important;
+    }
+
+    /* 5. STATISTICKÉ BOXY */
+    .stat-container { 
+        display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; justify-content: space-between;
+    }
     .stat-box { 
-        background: #1e293b; 
-        border-radius: 12px; 
-        padding: 15px; 
-        flex: 1; 
-        min-width: 140px; /* Aby se na PC nesmrskly moc */
-        text-align: center; 
-        border: 1px solid #334155; 
+        background: #1e293b; border-radius: 12px; padding: 15px; flex: 1; 
+        min-width: 140px; text-align: center; border: 1px solid #334155; 
         box-shadow: 0 4px 6px rgba(0,0,0,0.2);
     }
-
     .mini-stat-box {
-        background: #334155; 
-        border-radius: 8px; 
-        padding: 10px; 
-        flex: 1; 
-        min-width: 100px;
-        text-align: center; 
-        border: 1px solid #475569; 
-        margin-bottom: 5px;
+        background: #334155; border-radius: 8px; padding: 10px; flex: 1; 
+        min-width: 100px; text-align: center; border: 1px solid #475569; margin-bottom: 5px;
     }
 
-    /* 5. MOBILNÍ ÚPRAVY (Media Query) */
+    /* 6. MOBILNÍ ÚPRAVY */
     @media only screen and (max-width: 768px) {
-        .stat-box, .mini-stat-box {
-            min-width: 100% !important; /* Na mobilu přes celou šířku */
-            margin-bottom: 10px;
-        }
-        .stat-container {
-            flex-direction: column; /* Pod sebe */
-        }
+        .stat-box, .mini-stat-box { min-width: 100% !important; margin-bottom: 10px; }
+        .stat-container { flex-direction: column; }
     }
 
     .stat-label { font-size: 11px; text-transform: uppercase; color: #94a3b8; margin-bottom: 5px; font-weight: 700; }
     .stat-value { font-size: 20px; font-weight: 800; color: #fff; }
     .mini-value { font-size: 16px; font-weight: 700; color: #e2e8f0; }
-    
     .text-green { color: #34d399 !important; } .text-red { color: #f87171 !important; } .text-gold { color: #fbbf24 !important; }
     
-    /* Tlačítka */
-    .stButton > button { background-color: #334155 !important; color: white !important; border-radius: 10px !important; height: 50px; font-weight: 600; border: none;}
-    div[data-testid="stForm"] button[kind="primary"] { background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%) !important; color: #0f172a !important; }
     div[data-testid="stExpander"] { background-color: #1e293b !important; border: 1px solid #334155 !important; border-radius: 12px !important; }
     </style>
 """, unsafe_allow_html=True)
