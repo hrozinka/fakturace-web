@@ -49,7 +49,7 @@ DB_FILE = 'fakturace_v47_final.db'
 FONT_FILE = 'arial.ttf' 
 
 # --- 1. DESIGN ---
-st.set_page_config(page_title="MojeFaktury v6.2", page_icon="💎", layout="centered")
+st.set_page_config(page_title="MojeFaktury v6.3", page_icon="💎", layout="centered")
 
 st.markdown("""
     <style>
@@ -388,29 +388,28 @@ def reset_forms():
     st.session_state.form_reset_id += 1; st.session_state.ares_data = {}
     st.session_state.items_df = pd.DataFrame(columns=["Popis položky", "Cena"])
 
-# --- 8. LOGIN & LANDING PAGE ---
+# --- 8. LOGIN & LANDING PAGE (OPRAVENO FORMÁTOVÁNÍ HTML) ---
 if not st.session_state.user_id:
     col1, col2, col3 = st.columns([1, 10, 1])
     with col2:
+        # POUŽITÍ HTML BEZ ODSAZENÍ (ABY SE NEBRALO JAKO KÓD)
         st.markdown("""
-            <div class="login-container">
-                <div class="app-logo">💎</div>
-                <div class="app-title">MojeFaktury</div>
-                <div class="app-desc">
-                    Fakturace pro moderní živnostníky.<br>
-                    Rychlá, přehledná a vždy po ruce.
-                </div>
-                
-                <div class="feature-box">
-                    <p style="text-align:left; margin-bottom:5px;">✅ <b>Vystavení faktury do 30 vteřin</b></p>
-                    <p style="text-align:left; margin-bottom:5px;">✅ <b>Automatické načítání z ARES</b></p>
-                    <p style="text-align:left; margin-bottom:5px;">✅ <b>Export pro účetní (ISDOC)</b></p>
-                    <p style="text-align:left; margin-bottom:5px;">✅ <b>Přehledy příjmů a daní</b></p>
-                </div>
-                
-                <p style="font-size: 14px; color: #94a3b8 !important;">Máte dotaz? Napište nám na: <a href="mailto:jsem@michalkochtik.cz" style="color: #fbbf24;">jsem@michalkochtik.cz</a></p>
-            </div>
-        """, unsafe_allow_html=True)
+<div class="login-container">
+<div class="app-logo">💎</div>
+<div class="app-title">MojeFaktury</div>
+<div class="app-desc">
+Fakturace pro moderní živnostníky.<br>
+Rychlá, přehledná a vždy po ruce.
+</div>
+<div class="feature-box">
+<p style="text-align:left; margin-bottom:5px;">✅ <b>Vystavení faktury do 30 vteřin</b></p>
+<p style="text-align:left; margin-bottom:5px;">✅ <b>Automatické načítání z ARES</b></p>
+<p style="text-align:left; margin-bottom:5px;">✅ <b>Export pro účetní (ISDOC)</b></p>
+<p style="text-align:left; margin-bottom:5px;">✅ <b>Přehledy příjmů a daní</b></p>
+</div>
+<p style="font-size: 14px; color: #94a3b8 !important;">Máte dotaz? Napište nám na: <a href="mailto:jsem@michalkochtik.cz" style="color: #fbbf24;">jsem@michalkochtik.cz</a></p>
+</div>
+""", unsafe_allow_html=True)
         
         st.divider()
 
@@ -858,7 +857,7 @@ else:
                         for r in d.get('nastaveni', []):
                             exist = run_query("SELECT id FROM nastaveni WHERE user_id=?", (uid,), True)
                             if exist: run_command("UPDATE nastaveni SET nazev=?, adresa=?, ico=?, dic=?, ucet=?, banka=?, email=?, telefon=?, iban=? WHERE id=?", (r.get('nazev'), r.get('adresa'), r.get('ico'), r.get('dic'), r.get('ucet'), r.get('banka'), r.get('email'), r.get('telefon'), r.get('iban'), exist['id']))
-                            else: run_command("INSERT INTO nastaveni (user_id, nazev, adresa, ico, dic, ucet, banka, email, telefon, iban) VALUES (?,?,?,?,?,?,?,?,?,?)", (uid, r.get('nazev'), r.get('adresa'), r.get('ico'), r.get('dic'), r.get('ucet'), r.get('banka'), r.get('email'), r.get('telefon'), r.get('iban')))
+                            else: run_command("INSERT INTO nastaveni (user_id, nazev, adresa, ico, dic, banka, ucet, iban) VALUES (?,?,?,?,?,?,?,?,?,?)", (uid, r.get('nazev'), r.get('adresa'), r.get('ico'), r.get('dic'), r.get('ucet'), r.get('banka'), r.get('email'), r.get('telefon'), r.get('iban')))
                         for r in d.get('klienti', []):
                             exist = run_query("SELECT id FROM klienti WHERE jmeno=? AND user_id=?", (r.get('jmeno'), uid), True)
                             if exist: client_map[r['id']] = exist['id']
