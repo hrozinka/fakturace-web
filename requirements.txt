@@ -1,6 +1,7 @@
 streamlit
 pandas
-requests
 fpdf
 qrcode
 Pillow
+requests
+psycopg2-binary
