@@ -201,7 +201,17 @@ def init_db():
         c.execute('''CREATE TABLE IF NOT EXISTS licencni_klice (id SERIAL PRIMARY KEY, kod TEXT UNIQUE, dny_platnosti INTEGER, vygenerovano TEXT, pouzito_uzivatelem_id INTEGER, poznamka TEXT)''')
         c.execute('''CREATE TABLE IF NOT EXISTS email_templates (id SERIAL PRIMARY KEY, name TEXT UNIQUE, subject TEXT, body TEXT)''')
         c.execute('''CREATE TABLE IF NOT EXISTS vydaje (id SERIAL PRIMARY KEY, user_id INTEGER, datum TEXT, popis TEXT, castka REAL, kategorie TEXT)''')
+    conn.commit()
+    
+    # Bezpečná migrace pro starší databáze, kde mohl chybět sloupec force_password_change
+    try:
+        with conn.cursor() as c:
+            c.execute("ALTER TABLE users ADD COLUMN force_password_change INTEGER DEFAULT 0")
+        conn.commit()
+    except Exception:
+        conn.rollback() # Pokud už sloupec existuje, PostgreSQL vyhodí chybu, kterou bezpečně ignorujeme
 
+    with conn.cursor() as c:
         try: 
             c.execute("INSERT INTO email_templates (name, subject, body) VALUES ('welcome', 'Vítejte ve vašem fakturačním systému', 'Dobrý den {name},\n\nVáš účet byl úspěšně vytvořen.\n\nS pozdravem,\nTým MojeFakturace') ON CONFLICT (name) DO NOTHING")
         except: pass
@@ -455,19 +465,26 @@ Rychlá, přehledná a vždy po ruce.
         t1, t2, t3 = st.tabs(["PŘIHLÁŠENÍ", "REGISTRACE", "ZAPOMNĚL JSEM HESLO"])
         with t1:
             with st.form("log"):
-                u=st.text_input("Uživatelské jméno"); p=st.text_input("Heslo", type="password")
+                # Umožníme přihlášení pomocí loginu i emailu. Odstraníme případné mezery pomocí .strip()
+                u = st.text_input("Uživatelské jméno nebo Email").strip()
+                p = st.text_input("Heslo", type="password").strip()
+                
                 if st.form_submit_button("Vstoupit", type="primary", use_container_width=True):
-                    r = run_query("SELECT * FROM users WHERE username=? AND password_hash=?",(u, hash_password(p)), single=True)
+                    r = run_query("SELECT * FROM users WHERE (username=? OR email=?) AND password_hash=?",(u, u, hash_password(p)), single=True)
                     if r:
                         st.session_state.user_id=r['id']; st.session_state.role=r['role']; st.session_state.username=r['username']; st.session_state.full_name=r['full_name']; st.session_state.user_email=r['email']
                         st.session_state.force_pw_change = dict(r).get('force_password_change', 0)
                         valid, exp = check_license_validity(r['id'])
                         st.session_state.is_pro = valid
                         run_command("UPDATE users SET last_active=? WHERE id=?",(datetime.now().isoformat(), r['id'])); st.rerun()
-                    else: st.error("Neplatné údaje")
+                    else: st.error("Neplatné údaje. Zkontrolujte, zda jste nezkopírovali heslo s mezerou.")
         with t2:
             with st.form("reg"):
-                f=st.text_input("Jméno a Příjmení"); u=st.text_input("Login"); e=st.text_input("Email"); t_tel=st.text_input("Telefon"); p=st.text_input("Heslo",type="password")
+                f = st.text_input("Jméno a Příjmení").strip()
+                u = st.text_input("Login").strip()
+                e = st.text_input("Email").strip()
+                t_tel = st.text_input("Telefon").strip()
+                p = st.text_input("Heslo", type="password").strip()
                 if st.form_submit_button("Vytvořit účet", use_container_width=True):
                     try:
                         uid_new = run_command("INSERT INTO users (username,password_hash,full_name,email,phone,created_at,force_password_change) VALUES (?,?,?,?,?,?,0)",(u,hash_password(p),f,e,t_tel,datetime.now().isoformat()))
@@ -480,13 +497,18 @@ Rychlá, přehledná a vždy po ruce.
                     except Exception as ex: st.error(f"Chyba: {ex}")
         with t3:
             with st.form("forgot"):
-                fe = st.text_input("Váš Email"); 
+                fe = st.text_input("Váš Email").strip()
                 if st.form_submit_button("Resetovat heslo", use_container_width=True):
                     usr = run_query("SELECT * FROM users WHERE email=?", (fe,), single=True)
                     if usr:
                         new_pass = generate_random_password()
                         run_command("UPDATE users SET password_hash=?, force_password_change=1 WHERE id=?", (hash_password(new_pass), usr['id']))
-                        send_email_custom(fe, "Reset hesla", f"Nové heslo: {new_pass}"); st.success("Heslo odesláno.")
+                        
+                        email_body = f"Dobrý den,\n\nVaše přihlašovací údaje byly obnoveny.\n\nUživatelské jméno: {usr['username']}\nNové heslo: {new_pass}\n\nPo přihlášení budete vyzváni ke změně hesla."
+                        if send_email_custom(fe, "Reset hesla - MojeFaktury", email_body): 
+                            st.success("Nové heslo a přihlašovací jméno bylo odesláno na Váš email.")
+                        else:
+                            st.error("Chyba při odesílání emailu. Zkontrolujte nastavení SMTP.")
                     else: st.error("Email nenalezen.")
     st.stop()
 
@@ -498,7 +520,8 @@ run_command("UPDATE users SET last_active=? WHERE id=?",(datetime.now().isoforma
 if st.session_state.get('force_pw_change', 0) == 1:
     st.markdown("""<div class='alert-box'><h3>⚠️ Změna hesla vyžadována</h3></div>""", unsafe_allow_html=True)
     with st.form("force_change"):
-        np1 = st.text_input("Nové heslo", type="password"); np2 = st.text_input("Potvrzení hesla", type="password")
+        np1 = st.text_input("Nové heslo", type="password").strip()
+        np2 = st.text_input("Potvrzení hesla", type="password").strip()
         if st.form_submit_button("Změnit heslo a pokračovat", type="primary"):
             if np1 and np1 == np2:
                 run_command("UPDATE users SET password_hash=?, force_password_change=0 WHERE id=?", (hash_password(np1), uid)); st.session_state.force_pw_change = 0; st.success("Heslo změněno!"); st.rerun()
