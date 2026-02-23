@@ -14,6 +14,7 @@ import string
 import time
 import zipfile
 import xml.etree.ElementTree as ET
+import urllib3
 from datetime import datetime, date, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -24,6 +25,8 @@ from fpdf import FPDF
 import qrcode
 import psycopg2
 from psycopg2.extras import RealDictCursor
+
+urllib3.disable_warnings()
 
 # --- 0. KONFIGURACE ---
 try:
@@ -249,8 +252,8 @@ def get_next_invoice_number(kat_id, uid):
     if res: return (res['aktualni_cislo'], f"{res['prefix']}{res['aktualni_cislo']}", res['prefix'])
     return (1, "1", "")
 
+@st.cache_data(ttl=86400) # Rychlejší hledání z IČO (cachování na 24h zrychlí systém)
 def get_ares_data(ico):
-    import urllib3; urllib3.disable_warnings()
     if not ico: return None
     ico = "".join(filter(str.isdigit, str(ico))).zfill(8)
     url = f"https://ares.gov.cz/ekonomicke-subjekty-v-be/rest/ekonomicke-subjekty/{ico}"
@@ -465,7 +468,6 @@ Rychlá, přehledná a vždy po ruce.
         t1, t2, t3 = st.tabs(["PŘIHLÁŠENÍ", "REGISTRACE", "ZAPOMNĚL JSEM HESLO"])
         with t1:
             with st.form("log"):
-                # Umožníme přihlášení pomocí loginu i emailu. Odstraníme případné mezery pomocí .strip()
                 u = st.text_input("Uživatelské jméno nebo Email").strip()
                 p = st.text_input("Heslo", type="password").strip()
                 
@@ -504,9 +506,9 @@ Rychlá, přehledná a vždy po ruce.
                         new_pass = generate_random_password()
                         run_command("UPDATE users SET password_hash=?, force_password_change=1 WHERE id=?", (hash_password(new_pass), usr['id']))
                         
-                        email_body = f"Dobrý den,\n\nVaše přihlašovací údaje byly obnoveny.\n\nUživatelské jméno: {usr['username']}\nNové heslo: {new_pass}\n\nPo přihlášení budete vyzváni ke změně hesla."
+                        email_body = f"Dobrý den,\n\nVaše přihlašovací údaje byly obnoveny.\n\nPřihlašovací email: {usr['email']}\nNové heslo: {new_pass}\n\nPo přihlášení budete vyzváni ke změně hesla."
                         if send_email_custom(fe, "Reset hesla - MojeFaktury", email_body): 
-                            st.success("Nové heslo a přihlašovací jméno bylo odesláno na Váš email.")
+                            st.success("Nové heslo a přihlašovací email byl odeslán do Vaší schránky.")
                         else:
                             st.error("Chyba při odesílání emailu. Zkontrolujte nastavení SMTP.")
                     else: st.error("Email nenalezen.")
