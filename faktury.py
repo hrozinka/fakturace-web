@@ -99,48 +99,35 @@ st.markdown("""
 # --- 2. DATABÁZE OPTIMALIZACE (Connection Pool) ---
 @st.cache_resource
 def get_pool():
-    # Drží připojení v paměti pro obrovské zrychlení
     return psycopg2.pool.ThreadedConnectionPool(1, 20, db_url)
 
 def run_query(sql, params=(), single=False):
     sql = sql.replace("?", "%s")
-    p = get_pool()
-    conn = p.getconn()
+    p = get_pool(); conn = p.getconn()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as c:
             c.execute(sql, params)
             return c.fetchone() if single else c.fetchall()
-    except Exception as e: 
-        print(f"Query Error: {e}")
-        return None
-    finally: 
-        p.putconn(conn)
+    except Exception as e: print(f"Query Error: {e}"); return None
+    finally: p.putconn(conn)
 
 def run_command(sql, params=()):
     sql = sql.replace("?", "%s")
     is_insert = sql.strip().upper().startswith("INSERT")
-    if is_insert and "RETURNING id" not in sql and "ON CONFLICT" not in sql:
-        sql += " RETURNING id"
-        
-    p = get_pool()
-    conn = p.getconn()
+    if is_insert and "RETURNING id" not in sql and "ON CONFLICT" not in sql: sql += " RETURNING id"
+    p = get_pool(); conn = p.getconn()
     try: 
         with conn.cursor() as c:
-            c.execute(sql, params)
-            conn.commit()
+            c.execute(sql, params); conn.commit()
             if is_insert and "RETURNING id" in sql:
                 try: return c.fetchone()[0]
                 except: return None
             return None
-    except Exception as e: 
-        print(f"Command Error: {e}")
-        return None
-    finally: 
-        p.putconn(conn)
+    except Exception as e: print(f"Command Error: {e}"); return None
+    finally: p.putconn(conn)
 
 def init_db():
-    p = get_pool()
-    conn = p.getconn()
+    p = get_pool(); conn = p.getconn()
     try:
         with conn.cursor() as c:
             c.execute('''CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, username TEXT UNIQUE, password_hash TEXT, full_name TEXT, email TEXT, phone TEXT, license_key TEXT, license_valid_until TEXT, role TEXT DEFAULT 'user', created_at TEXT, last_active TEXT, force_password_change INTEGER DEFAULT 0)''')
@@ -168,8 +155,7 @@ def init_db():
                 c.execute("UPDATE users SET password_hash=%s WHERE username='admin'", (adm_hash,))
             except Exception as e: print(f"Chyba admin sync: {e}")
         conn.commit()
-    finally:
-        p.putconn(conn)
+    finally: p.putconn(conn)
 
 if 'db_inited' not in st.session_state:
     init_db()
@@ -366,14 +352,11 @@ def generate_pdf(faktura_id, uid, is_pro):
         return pdf.output(dest='S').encode('latin-1')
     except Exception as e: return f"CHYBA: {str(e)}"
 
-# Rychlé CACHE pro PDF aby se nepočítalo 50x při načtení stránky
 @st.cache_data(show_spinner=False, max_entries=500)
-def get_cached_pdf(faktura_id, uid, is_pro, row_hash):
-    return generate_pdf(faktura_id, uid, is_pro)
+def get_cached_pdf(faktura_id, uid, is_pro, row_hash): return generate_pdf(faktura_id, uid, is_pro)
 
 @st.cache_data(show_spinner=False, max_entries=500)
-def get_cached_isdoc(faktura_id, uid, row_hash):
-    return generate_isdoc(faktura_id, uid)
+def get_cached_isdoc(faktura_id, uid, row_hash): return generate_isdoc(faktura_id, uid)
 
 # --- 7. SESSION ---
 if 'user_id' not in st.session_state: st.session_state.user_id = None
@@ -406,7 +389,6 @@ Rychlá, přehledná a vždy po ruce.
 <p style="text-align:left; margin-bottom:5px;">✅ <b>Export pro účetní (ISDOC)</b></p>
 <p style="text-align:left; margin-bottom:5px;">✅ <b>Přehledy příjmů a daní</b></p>
 </div>
-<p style="font-size: 14px; color: #94a3b8 !important;">Máte dotaz? Napište nám na: <a href="mailto:jsem@michalkochtik.cz" style="color: #fbbf24;">jsem@michalkochtik.cz</a></p>
 </div>
 """, unsafe_allow_html=True)
         st.divider()
@@ -491,8 +473,6 @@ if role == 'admin':
     tabs = st.tabs(["Uživatelé & Licence", "Generátor klíčů", "📧 E-mailing"])
     with tabs[0]:
         st.subheader("📋 Seznam uživatelů")
-        
-        # Optimalizace N+1 dotazu: Dotáhneme klíče jednou nad cyklem
         fk = run_query("SELECT * FROM licencni_klice WHERE pouzito_uzivatelem_id IS NULL ORDER BY id DESC")
         key_dict = {f"{k['kod']} ({k['dny_platnosti']} dní)": k for k in fk}
 
@@ -541,151 +521,150 @@ if role == 'admin':
 
 # USER
 else:
-    menu = st.sidebar.radio(" ", ["📊 Faktury", "🏛️ Daně", "💸 Výdaje", "👥 Klienti", "🏷️ Kategorie", "⚙️ Nastavení"])
+    # Oddělení Dashboardu od Faktur pro obrovské zrychlení!
+    menu = st.sidebar.radio(" ", ["📊 Faktury", "📈 Dashboard", "🏛️ Daně", "💸 Výdaje", "👥 Klienti", "🏷️ Kategorie", "⚙️ Nastavení"])
     
     if "Faktury" in menu:
-        t1, t2 = st.tabs(["Přehled & Seznam", "📈 Dashboard"])
-        with t1:
-            st.header("Faktury")
-            years = [r['substring'] for r in run_query("SELECT DISTINCT SUBSTRING(datum_vystaveni, 1, 4) as substring FROM faktury WHERE user_id=?", (uid,))]
-            if str(datetime.now().year) not in years: years.append(str(datetime.now().year))
-            sy = st.selectbox("Rok (Statistika)", sorted(list(set(years)), reverse=True))
-            sc_y = run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=? AND SUBSTRING(datum_vystaveni, 1, 4)=?", (uid, sy), True)['sum'] or 0
-            sc_a = run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=?", (uid,), True)['sum'] or 0
-            su_a = run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=? AND uhrazeno=0", (uid,), True)['sum'] or 0
-            st.markdown(f"<div class='stat-container'><div class='stat-box'><div class='stat-label'>OBRAT {sy}</div><div class='stat-value text-green'>{sc_y:,.0f}</div></div><div class='stat-box'><div class='stat-label'>CELKEM</div><div class='stat-value text-gold'>{sc_a:,.0f}</div></div><div class='stat-box'><div class='stat-label'>DLUŽÍ</div><div class='stat-value text-red'>{su_a:,.0f}</div></div></div>", unsafe_allow_html=True)
-            
-            with st.expander("➕ Nová faktura"):
-                p_pool = get_pool(); conn = p_pool.getconn()
-                try:
-                    kli = pd.read_sql("SELECT id, jmeno FROM klienti WHERE user_id=%s", conn, params=(uid,))
-                    kat = pd.read_sql("SELECT id, nazev FROM kategorie WHERE user_id=%s", conn, params=(uid,))
-                finally: p_pool.putconn(conn)
-                
-                if kli.empty: st.warning("Vytvořte klienta.")
-                elif not is_pro and kat.empty: run_command("INSERT INTO kategorie (user_id, nazev, prefix, aktualni_cislo, barva) VALUES (?, 'Obecná', 'FV', 1, '#000000')", (uid,)); get_cached_pdf.clear(); st.rerun()
-                else:
-                    rid = st.session_state.form_reset_id; c1,c2 = st.columns(2)
-                    sk = c1.selectbox("Klient", kli['jmeno'], key=f"k_{rid}"); sc = c2.selectbox("Kategorie", kat['nazev'], key=f"c_{rid}")
-                    if not kli[kli['jmeno']==sk].empty and not kat[kat['nazev']==sc].empty:
-                        kid = int(kli[kli['jmeno']==sk]['id'].values[0]); cid = int(kat[kat['nazev']==sc]['id'].values[0])
-                        _, full, _ = get_next_invoice_number(cid, uid); st.info(f"Doklad: {full}")
-                        d1,d2 = st.columns(2); dv = d1.date_input("Vystavení", date.today(), key=f"d1_{rid}"); ds = d2.date_input("Splatnost", date.today()+timedelta(14), key=f"d2_{rid}")
-                        ut = st.text_input("Úvodní text", "Fakturujeme Vám:", key=f"ut_{rid}")
-                        ed = st.data_editor(st.session_state.items_df, num_rows="dynamic", use_container_width=True, key=f"e_{rid}")
-                        total_sum = float(pd.to_numeric(ed["Cena"], errors='coerce').fillna(0).sum()) if not ed.empty and "Cena" in ed.columns else 0.0
-                        st.markdown(f"**💰 Celkem k úhradě: {total_sum:,.2f} Kč**")
-                        if st.button("Vystavit", type="primary", key=f"b_{rid}"):
-                            fid = run_command("INSERT INTO faktury (user_id, cislo_full, klient_id, kategorie_id, datum_vystaveni, datum_splatnosti, castka_celkem, variabilni_symbol, uvodni_text) VALUES (?,?,?,?,?,?,?,?,?)", (uid, full, kid, cid, dv, ds, total_sum, re.sub(r"\D", "", full), ut))
-                            for _, r in ed.iterrows(): 
-                                if r.get("Popis položky"): run_command("INSERT INTO faktura_polozky (faktura_id, nazev, cena) VALUES (?,?,?)", (fid, r["Popis položky"], float(r.get("Cena", 0))))
-                            run_command("UPDATE kategorie SET aktualni_cislo = aktualni_cislo + 1 WHERE id = ?", (cid,))
-                            reset_forms(); get_cached_pdf.clear(); get_cached_isdoc.clear(); st.success("OK"); st.rerun()
-
-            st.markdown("<br>", unsafe_allow_html=True)
-            sel_cli = st.selectbox("Filtr Klient", ["Všichni"] + [c['jmeno'] for c in run_query("SELECT jmeno FROM klienti WHERE user_id=?", (uid,))])
-            db_years = [y['substring'] for y in run_query("SELECT DISTINCT SUBSTRING(datum_vystaveni, 1, 4) as substring FROM faktury WHERE user_id=?", (uid,))]
-            sel_yf = st.selectbox("Filtr Rok", ["Všechny"] + sorted(db_years, reverse=True))
-
-            if sel_cli != "Všichni":
-                cl_all = run_query("SELECT SUM(f.castka_celkem) FROM faktury f JOIN klienti k ON f.klient_id=k.id WHERE f.user_id=? AND k.jmeno=?", (uid, sel_cli), True)['sum'] or 0
-                cl_due = run_query("SELECT SUM(f.castka_celkem) FROM faktury f JOIN klienti k ON f.klient_id=k.id WHERE f.user_id=? AND k.jmeno=? AND f.uhrazeno=0", (uid, sel_cli), True)['sum'] or 0
-                cols = st.columns(3)
-                cols[0].markdown(f"<div class='mini-stat-box'><div class='stat-label'>CELKEM (HISTORIE)</div><div class='mini-value'>{cl_all:,.0f} Kč</div></div>", unsafe_allow_html=True)
-                if sel_yf != "Všechny":
-                    cl_yr = run_query("SELECT SUM(f.castka_celkem) FROM faktury f JOIN klienti k ON f.klient_id=k.id WHERE f.user_id=? AND k.jmeno=? AND SUBSTRING(f.datum_vystaveni, 1, 4)=?", (uid, sel_cli, sel_yf), True)['sum'] or 0
-                    cols[1].markdown(f"<div class='mini-stat-box'><div class='stat-label'>OBRAT {sel_yf}</div><div class='mini-value text-green'>{cl_yr:,.0f} Kč</div></div>", unsafe_allow_html=True)
-                cols[2].markdown(f"<div class='mini-stat-box'><div class='stat-label'>DLUŽÍ</div><div class='mini-value text-red'>{cl_due:,.0f} Kč</div></div>", unsafe_allow_html=True)
-
-            q = "SELECT f.*, k.jmeno FROM faktury f JOIN klienti k ON f.klient_id=k.id WHERE f.user_id=%s"; p = [uid]
-            if sel_cli != "Všichni": q += " AND k.jmeno=%s"; p.append(sel_cli)
-            if sel_yf != "Všechny": q += " AND SUBSTRING(f.datum_vystaveni, 1, 4)=%s"; p.append(sel_yf)
-            
+        st.header("Faktury")
+        years = [r['substring'] for r in run_query("SELECT DISTINCT SUBSTRING(datum_vystaveni, 1, 4) as substring FROM faktury WHERE user_id=?", (uid,))]
+        if str(datetime.now().year) not in years: years.append(str(datetime.now().year))
+        sy = st.selectbox("Rok (Statistika)", sorted(list(set(years)), reverse=True))
+        sc_y = run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=? AND SUBSTRING(datum_vystaveni, 1, 4)=?", (uid, sy), True)['sum'] or 0
+        sc_a = run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=?", (uid,), True)['sum'] or 0
+        su_a = run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=? AND uhrazeno=0", (uid,), True)['sum'] or 0
+        st.markdown(f"<div class='stat-container'><div class='stat-box'><div class='stat-label'>OBRAT {sy}</div><div class='stat-value text-green'>{sc_y:,.0f}</div></div><div class='stat-box'><div class='stat-label'>CELKEM</div><div class='stat-value text-gold'>{sc_a:,.0f}</div></div><div class='stat-box'><div class='stat-label'>DLUŽÍ</div><div class='stat-value text-red'>{su_a:,.0f}</div></div></div>", unsafe_allow_html=True)
+        
+        with st.expander("➕ Nová faktura"):
             p_pool = get_pool(); conn = p_pool.getconn()
-            try: df_faktury = pd.read_sql(q + " ORDER BY f.id DESC LIMIT 50", conn, params=p)
+            try:
+                kli = pd.read_sql("SELECT id, jmeno FROM klienti WHERE user_id=%s", conn, params=(uid,))
+                kat = pd.read_sql("SELECT id, nazev FROM kategorie WHERE user_id=%s", conn, params=(uid,))
             finally: p_pool.putconn(conn)
             
-            for row in df_faktury.to_dict('records'):
-                cf = row.get('cislo_full') or f"F{row['id']}"
-                with st.expander(f"{'✅' if row['uhrazeno'] else '⏳'} {cf} | {row['jmeno']} | {row['castka_celkem']:.0f} Kč"):
-                    c1,c2,c3 = st.columns([1,1,1])
-                    if row['uhrazeno']: 
-                        if c1.button("Zrušit úhradu", key=f"u0_{row['id']}"): run_command("UPDATE faktury SET uhrazeno=0 WHERE id=?",(row['id'],)); get_cached_pdf.clear(); get_cached_isdoc.clear(); st.rerun()
-                    else: 
-                        if c1.button("Zaplaceno", key=f"u1_{row['id']}"): run_command("UPDATE faktury SET uhrazeno=1 WHERE id=?",(row['id'],)); get_cached_pdf.clear(); get_cached_isdoc.clear(); st.rerun()
-                    
-                    # Bleskurychlé generování PDF přes paměťové Cache
-                    row_hash = str(row)
-                    pdf_output = get_cached_pdf(row['id'], uid, is_pro, row_hash)
-                    if isinstance(pdf_output, bytes): c2.download_button("PDF", pdf_output, f"{cf}.pdf", "application/pdf", key=f"pd_{row['id']}")
-                    
-                    if is_pro:
-                        isdoc_bytes = get_cached_isdoc(row['id'], uid, row_hash)
-                        if isdoc_bytes: c2.download_button("ISDOC", isdoc_bytes, f"{cf}.isdoc", "application/xml", key=f"isd_{row['id']}")
+            if kli.empty: st.warning("Vytvořte klienta.")
+            elif not is_pro and kat.empty: run_command("INSERT INTO kategorie (user_id, nazev, prefix, aktualni_cislo, barva) VALUES (?, 'Obecná', 'FV', 1, '#000000')", (uid,)); get_cached_pdf.clear(); st.rerun()
+            else:
+                rid = st.session_state.form_reset_id; c1,c2 = st.columns(2)
+                sk = c1.selectbox("Klient", kli['jmeno'], key=f"k_{rid}"); sc = c2.selectbox("Kategorie", kat['nazev'], key=f"c_{rid}")
+                if not kli[kli['jmeno']==sk].empty and not kat[kat['nazev']==sc].empty:
+                    kid = int(kli[kli['jmeno']==sk]['id'].values[0]); cid = int(kat[kat['nazev']==sc]['id'].values[0])
+                    _, full, _ = get_next_invoice_number(cid, uid); st.info(f"Doklad: {full}")
+                    d1,d2 = st.columns(2); dv = d1.date_input("Vystavení", date.today(), key=f"d1_{rid}"); ds = d2.date_input("Splatnost", date.today()+timedelta(14), key=f"d2_{rid}")
+                    ut = st.text_input("Úvodní text", "Fakturujeme Vám:", key=f"ut_{rid}")
+                    ed = st.data_editor(st.session_state.items_df, num_rows="dynamic", use_container_width=True, key=f"e_{rid}")
+                    total_sum = float(pd.to_numeric(ed["Cena"], errors='coerce').fillna(0).sum()) if not ed.empty and "Cena" in ed.columns else 0.0
+                    st.markdown(f"**💰 Celkem k úhradě: {total_sum:,.2f} Kč**")
+                    if st.button("Vystavit", type="primary", key=f"b_{rid}"):
+                        fid = run_command("INSERT INTO faktury (user_id, cislo_full, klient_id, kategorie_id, datum_vystaveni, datum_splatnosti, castka_celkem, variabilni_symbol, uvodni_text) VALUES (?,?,?,?,?,?,?,?,?)", (uid, full, kid, cid, dv, ds, total_sum, re.sub(r"\D", "", full), ut))
+                        for _, r in ed.iterrows(): 
+                            if r.get("Popis položky"): run_command("INSERT INTO faktura_polozky (faktura_id, nazev, cena) VALUES (?,?,?)", (fid, r["Popis položky"], float(r.get("Cena", 0))))
+                        run_command("UPDATE kategorie SET aktualni_cislo = aktualni_cislo + 1 WHERE id = ?", (cid,))
+                        reset_forms(); get_cached_pdf.clear(); get_cached_isdoc.clear(); st.success("OK"); st.rerun()
 
-                    f_edit_key = f"edit_f_{row['id']}"
-                    if f_edit_key not in st.session_state: st.session_state[f_edit_key] = False
-                    if c3.button("✏️ Upravit", key=f"be_{row['id']}"): st.session_state[f_edit_key] = True; st.rerun()
-                    
-                    if st.session_state[f_edit_key]:
-                        with st.form(f"fe_{row['id']}"):
-                            nd = st.date_input("Splatnost", pd.to_datetime(row['datum_splatnosti']))
-                            nm = st.text_input("Popis", row['muj_popis'] or ""); nut = st.text_input("Úvodní text", row['uvodni_text'] or "")
-                            
-                            p_item = get_pool(); conn_item = p_item.getconn()
-                            try: cur_i = pd.read_sql("SELECT nazev as \"Popis položky\", cena as \"Cena\" FROM faktura_polozky WHERE faktura_id=%s", conn_item, params=(row['id'],))
-                            finally: p_item.putconn(conn_item)
-                            
-                            ned = st.data_editor(cur_i, num_rows="dynamic", use_container_width=True)
-                            if st.form_submit_button("Uložit změny"):
-                                ntot = float(pd.to_numeric(ned["Cena"], errors='coerce').fillna(0).sum())
-                                run_command("UPDATE faktury SET datum_splatnosti=?, muj_popis=?, castka_celkem=?, uvodni_text=? WHERE id=?", (nd, nm, ntot, nut, row['id']))
-                                run_command("DELETE FROM faktura_polozky WHERE faktura_id=?", (row['id'],))
-                                for _, rw in ned.iterrows():
-                                    if rw.get("Popis položky"): run_command("INSERT INTO faktura_polozky (faktura_id, nazev, cena) VALUES (?,?,?)", (row['id'], rw["Popis položky"], float(rw.get("Cena", 0))))
-                                st.session_state[f_edit_key] = False; get_cached_pdf.clear(); get_cached_isdoc.clear(); st.rerun()
+        st.markdown("<br>", unsafe_allow_html=True)
+        sel_cli = st.selectbox("Filtr Klient", ["Všichni"] + [c['jmeno'] for c in run_query("SELECT jmeno FROM klienti WHERE user_id=?", (uid,))])
+        db_years = [y['substring'] for y in run_query("SELECT DISTINCT SUBSTRING(datum_vystaveni, 1, 4) as substring FROM faktury WHERE user_id=?", (uid,))]
+        sel_yf = st.selectbox("Filtr Rok", ["Všechny"] + sorted(db_years, reverse=True))
 
-                    if c3.button("🔄 Duplikovat", key=f"dup_{row['id']}"):
-                        new_num, new_full, _ = get_next_invoice_number(row['kategorie_id'], uid)
-                        new_fid = run_command("""INSERT INTO faktury (user_id, cislo, cislo_full, klient_id, kategorie_id, datum_vystaveni, datum_splatnosti, castka_celkem, variabilni_symbol, uvodni_text, muj_popis) VALUES (?,?,?,?,?,?,?,?,?,?,?)""", (uid, new_num, new_full, row['klient_id'], row['kategorie_id'], date.today(), date.today()+timedelta(14), row['castka_celkem'], re.sub(r"\D", "", new_full), row['uvodni_text'], row['muj_popis']))
-                        items = run_query("SELECT * FROM faktura_polozky WHERE faktura_id=?", (row['id'],))
-                        for it in items: run_command("INSERT INTO faktura_polozky (faktura_id, nazev, cena) VALUES (?,?,?)", (new_fid, it['nazev'], it['cena']))
-                        run_command("UPDATE kategorie SET aktualni_cislo = aktualni_cislo + 1 WHERE id = ?", (row['kategorie_id'],))
-                        get_cached_pdf.clear(); get_cached_isdoc.clear(); st.success(f"Faktura {new_full} vytvořena!"); st.rerun()
+        if sel_cli != "Všichni":
+            cl_all = run_query("SELECT SUM(f.castka_celkem) FROM faktury f JOIN klienti k ON f.klient_id=k.id WHERE f.user_id=? AND k.jmeno=?", (uid, sel_cli), True)['sum'] or 0
+            cl_due = run_query("SELECT SUM(f.castka_celkem) FROM faktury f JOIN klienti k ON f.klient_id=k.id WHERE f.user_id=? AND k.jmeno=? AND f.uhrazeno=0", (uid, sel_cli), True)['sum'] or 0
+            cols = st.columns(3)
+            cols[0].markdown(f"<div class='mini-stat-box'><div class='stat-label'>CELKEM (HISTORIE)</div><div class='mini-value'>{cl_all:,.0f} Kč</div></div>", unsafe_allow_html=True)
+            if sel_yf != "Všechny":
+                cl_yr = run_query("SELECT SUM(f.castka_celkem) FROM faktury f JOIN klienti k ON f.klient_id=k.id WHERE f.user_id=? AND k.jmeno=? AND SUBSTRING(f.datum_vystaveni, 1, 4)=?", (uid, sel_cli, sel_yf), True)['sum'] or 0
+                cols[1].markdown(f"<div class='mini-stat-box'><div class='stat-label'>OBRAT {sel_yf}</div><div class='mini-value text-green'>{cl_yr:,.0f} Kč</div></div>", unsafe_allow_html=True)
+            cols[2].markdown(f"<div class='mini-stat-box'><div class='stat-label'>DLUŽÍ</div><div class='mini-value text-red'>{cl_due:,.0f} Kč</div></div>", unsafe_allow_html=True)
 
-                    if st.button("Smazat", key=f"bd_{row['id']}"): run_command("DELETE FROM faktury WHERE id=?",(row['id'],)); get_cached_pdf.clear(); get_cached_isdoc.clear(); st.rerun()
+        q = "SELECT f.*, k.jmeno FROM faktury f JOIN klienti k ON f.klient_id=k.id WHERE f.user_id=%s"; p = [uid]
+        if sel_cli != "Všichni": q += " AND k.jmeno=%s"; p.append(sel_cli)
+        if sel_yf != "Všechny": q += " AND SUBSTRING(f.datum_vystaveni, 1, 4)=%s"; p.append(sel_yf)
         
-        with t2:
-            st.markdown("### 🚀 Přehled podnikání")
-            tot_rev = run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=?", (uid,), True)['sum'] or 0
-            tot_paid = run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=? AND uhrazeno=1", (uid,), True)['sum'] or 0
-            tot_due = run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=? AND uhrazeno=0", (uid,), True)['sum'] or 0
-            count_inv = run_query("SELECT COUNT(*) FROM faktury WHERE user_id=?", (uid,), True)['count'] or 0
-            mc1, mc2, mc3, mc4 = st.columns(4)
-            mc1.metric("Celkem vystaveno", f"{tot_rev:,.0f} Kč"); mc2.metric("Zaplaceno", f"{tot_paid:,.0f} Kč", delta=f"{int(tot_paid/tot_rev*100) if tot_rev else 0} %"); mc3.metric("Dluží klienti", f"{tot_due:,.0f} Kč", delta="-", delta_color="inverse"); mc4.metric("Počet faktur", count_inv)
-            st.divider()
-            gc1, gc2 = st.columns([2, 1])
-            
-            p_graphs = get_pool(); conn_graphs = p_graphs.getconn()
-            try:
-                with gc1:
-                    st.subheader("📈 Vývoj v čase")
-                    df_g = pd.read_sql("SELECT datum_vystaveni, castka_celkem FROM faktury WHERE user_id=%s", conn_graphs, params=(uid,))
-                    if not df_g.empty:
-                        df_g['datum'] = pd.to_datetime(df_g['datum_vystaveni'])
-                        monthly = df_g.groupby(df_g['datum'].dt.to_period('M'))['castka_celkem'].sum()
-                        monthly.index = monthly.index.astype(str)
-                        st.bar_chart(monthly, color="#fbbf24")
-                    else: st.info("Zatím žádná data.")
-                with gc2:
-                    st.subheader("🏆 TOP 5 Klientů")
-                    df_top = pd.read_sql("SELECT k.jmeno, SUM(f.castka_celkem) as celkem FROM faktury f JOIN klienti k ON f.klient_id=k.id WHERE f.user_id=%s GROUP BY k.jmeno ORDER BY celkem DESC LIMIT 5", conn_graphs, params=(uid,))
-                    if not df_top.empty: st.dataframe(df_top.set_index('jmeno').style.format("{:,.0f} Kč"), use_container_width=True)
-                    else: st.info("Žádní klienti.")
-                st.subheader("🍰 Příjmy dle kategorií")
-                df_c = pd.read_sql("SELECT k.nazev, SUM(f.castka_celkem) as celkem FROM faktury f JOIN kategorie k ON f.kategorie_id=k.id WHERE f.user_id=%s GROUP BY k.nazev", conn_graphs, params=(uid,))
-                if not df_c.empty: st.bar_chart(df_c.set_index('nazev'))
-            finally: p_graphs.putconn(conn_graphs)
+        p_pool = get_pool(); conn = p_pool.getconn()
+        # ZDE JE ZRYCHLENÍ: Omezili jsme historii na 20 pro bleskové načtení UI. Většina uživatelů nepotřebuje rolovat 50 naráz.
+        try: df_faktury = pd.read_sql(q + " ORDER BY f.id DESC LIMIT 20", conn, params=p)
+        finally: p_pool.putconn(conn)
+        
+        for row in df_faktury.to_dict('records'):
+            cf = row.get('cislo_full') or f"F{row['id']}"
+            with st.expander(f"{'✅' if row['uhrazeno'] else '⏳'} {cf} | {row['jmeno']} | {row['castka_celkem']:.0f} Kč"):
+                c1,c2,c3 = st.columns([1,1,1])
+                if row['uhrazeno']: 
+                    if c1.button("Zrušit úhradu", key=f"u0_{row['id']}"): run_command("UPDATE faktury SET uhrazeno=0 WHERE id=?",(row['id'],)); get_cached_pdf.clear(); get_cached_isdoc.clear(); st.rerun()
+                else: 
+                    if c1.button("Zaplaceno", key=f"u1_{row['id']}"): run_command("UPDATE faktury SET uhrazeno=1 WHERE id=?",(row['id'],)); get_cached_pdf.clear(); get_cached_isdoc.clear(); st.rerun()
+                
+                row_hash = str(row)
+                pdf_output = get_cached_pdf(row['id'], uid, is_pro, row_hash)
+                if isinstance(pdf_output, bytes): c2.download_button("PDF", pdf_output, f"{cf}.pdf", "application/pdf", key=f"pd_{row['id']}")
+                
+                if is_pro:
+                    isdoc_bytes = get_cached_isdoc(row['id'], uid, row_hash)
+                    if isdoc_bytes: c2.download_button("ISDOC", isdoc_bytes, f"{cf}.isdoc", "application/xml", key=f"isd_{row['id']}")
+
+                f_edit_key = f"edit_f_{row['id']}"
+                if f_edit_key not in st.session_state: st.session_state[f_edit_key] = False
+                if c3.button("✏️ Upravit", key=f"be_{row['id']}"): st.session_state[f_edit_key] = True; st.rerun()
+                
+                if st.session_state[f_edit_key]:
+                    with st.form(f"fe_{row['id']}"):
+                        nd = st.date_input("Splatnost", pd.to_datetime(row['datum_splatnosti']))
+                        nm = st.text_input("Popis", row['muj_popis'] or ""); nut = st.text_input("Úvodní text", row['uvodni_text'] or "")
+                        
+                        p_item = get_pool(); conn_item = p_item.getconn()
+                        try: cur_i = pd.read_sql("SELECT nazev as \"Popis položky\", cena as \"Cena\" FROM faktura_polozky WHERE faktura_id=%s", conn_item, params=(row['id'],))
+                        finally: p_item.putconn(conn_item)
+                        
+                        ned = st.data_editor(cur_i, num_rows="dynamic", use_container_width=True)
+                        if st.form_submit_button("Uložit změny"):
+                            ntot = float(pd.to_numeric(ned["Cena"], errors='coerce').fillna(0).sum())
+                            run_command("UPDATE faktury SET datum_splatnosti=?, muj_popis=?, castka_celkem=?, uvodni_text=? WHERE id=?", (nd, nm, ntot, nut, row['id']))
+                            run_command("DELETE FROM faktura_polozky WHERE faktura_id=?", (row['id'],))
+                            for _, rw in ned.iterrows():
+                                if rw.get("Popis položky"): run_command("INSERT INTO faktura_polozky (faktura_id, nazev, cena) VALUES (?,?,?)", (row['id'], rw["Popis položky"], float(rw.get("Cena", 0))))
+                            st.session_state[f_edit_key] = False; get_cached_pdf.clear(); get_cached_isdoc.clear(); st.rerun()
+
+                if c3.button("🔄 Duplikovat", key=f"dup_{row['id']}"):
+                    new_num, new_full, _ = get_next_invoice_number(row['kategorie_id'], uid)
+                    new_fid = run_command("""INSERT INTO faktury (user_id, cislo, cislo_full, klient_id, kategorie_id, datum_vystaveni, datum_splatnosti, castka_celkem, variabilni_symbol, uvodni_text, muj_popis) VALUES (?,?,?,?,?,?,?,?,?,?,?)""", (uid, new_num, new_full, row['klient_id'], row['kategorie_id'], date.today(), date.today()+timedelta(14), row['castka_celkem'], re.sub(r"\D", "", new_full), row['uvodni_text'], row['muj_popis']))
+                    items = run_query("SELECT * FROM faktura_polozky WHERE faktura_id=?", (row['id'],))
+                    for it in items: run_command("INSERT INTO faktura_polozky (faktura_id, nazev, cena) VALUES (?,?,?)", (new_fid, it['nazev'], it['cena']))
+                    run_command("UPDATE kategorie SET aktualni_cislo = aktualni_cislo + 1 WHERE id = ?", (row['kategorie_id'],))
+                    get_cached_pdf.clear(); get_cached_isdoc.clear(); st.success(f"Faktura {new_full} vytvořena!"); st.rerun()
+
+                if st.button("Smazat", key=f"bd_{row['id']}"): run_command("DELETE FROM faktury WHERE id=?",(row['id'],)); get_cached_pdf.clear(); get_cached_isdoc.clear(); st.rerun()
+    
+    elif "Dashboard" in menu:
+        st.header("🚀 Přehled podnikání")
+        tot_rev = run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=?", (uid,), True)['sum'] or 0
+        tot_paid = run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=? AND uhrazeno=1", (uid,), True)['sum'] or 0
+        tot_due = run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=? AND uhrazeno=0", (uid,), True)['sum'] or 0
+        count_inv = run_query("SELECT COUNT(*) FROM faktury WHERE user_id=?", (uid,), True)['count'] or 0
+        mc1, mc2, mc3, mc4 = st.columns(4)
+        mc1.metric("Celkem vystaveno", f"{tot_rev:,.0f} Kč"); mc2.metric("Zaplaceno", f"{tot_paid:,.0f} Kč", delta=f"{int(tot_paid/tot_rev*100) if tot_rev else 0} %"); mc3.metric("Dluží klienti", f"{tot_due:,.0f} Kč", delta="-", delta_color="inverse"); mc4.metric("Počet faktur", count_inv)
+        st.divider()
+        gc1, gc2 = st.columns([2, 1])
+        
+        p_graphs = get_pool(); conn_graphs = p_graphs.getconn()
+        try:
+            with gc1:
+                st.subheader("📈 Vývoj v čase")
+                df_g = pd.read_sql("SELECT datum_vystaveni, castka_celkem FROM faktury WHERE user_id=%s", conn_graphs, params=(uid,))
+                if not df_g.empty:
+                    df_g['datum'] = pd.to_datetime(df_g['datum_vystaveni'])
+                    monthly = df_g.groupby(df_g['datum'].dt.to_period('M'))['castka_celkem'].sum()
+                    monthly.index = monthly.index.astype(str)
+                    st.bar_chart(monthly, color="#fbbf24")
+                else: st.info("Zatím žádná data.")
+            with gc2:
+                st.subheader("🏆 TOP 5 Klientů")
+                df_top = pd.read_sql("SELECT k.jmeno, SUM(f.castka_celkem) as celkem FROM faktury f JOIN klienti k ON f.klient_id=k.id WHERE f.user_id=%s GROUP BY k.jmeno ORDER BY celkem DESC LIMIT 5", conn_graphs, params=(uid,))
+                if not df_top.empty: st.dataframe(df_top.set_index('jmeno').style.format("{:,.0f} Kč"), use_container_width=True)
+                else: st.info("Žádní klienti.")
+            st.subheader("🍰 Příjmy dle kategorií")
+            df_c = pd.read_sql("SELECT k.nazev, SUM(f.castka_celkem) as celkem FROM faktury f JOIN kategorie k ON f.kategorie_id=k.id WHERE f.user_id=%s GROUP BY k.nazev", conn_graphs, params=(uid,))
+            if not df_c.empty: st.bar_chart(df_c.set_index('nazev'))
+        finally: p_graphs.putconn(conn_graphs)
 
     elif "🏛️ Daně" in menu:
         st.header("🏛️ Daňová kalkulačka (Orientační)")
