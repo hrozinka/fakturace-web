@@ -126,7 +126,8 @@ hr{border-color:rgba(255,255,255,.055)!important;margin:1.4rem 0!important}
 .brand-title{font-family:'Syne',sans-serif;font-size:2.9rem;font-weight:800;
   background:linear-gradient(120deg,#fbbf24 0%,#fde68a 45%,#f59e0b 100%);background-size:200% auto;
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
-  animation:shine 3.5s linear infinite;letter-spacing:-.03em}
+  animation:shine 3.5s linear infinite;letter-spacing:-.03em;
+  word-break:keep-all;overflow-wrap:normal;white-space:nowrap}
 @keyframes shine{to{background-position:200% center}}
 .brand-sub{color:#475569;font-size:1rem;margin:8px 0 28px;line-height:1.6}
 .feat-grid{background:rgba(255,255,255,.022);border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:22px 24px;margin-bottom:24px}
@@ -191,6 +192,110 @@ hr{border-color:rgba(255,255,255,.055)!important;margin:1.4rem 0!important}
 .adm-card{background:rgba(255,255,255,.022);border:1px solid rgba(255,255,255,.07);border-radius:13px;padding:17px 14px;text-align:center}
 .adm-val{font-family:'Syne',sans-serif;font-size:1.45rem;font-weight:800;color:#f1f5f9;margin-bottom:4px}
 .adm-lbl{font-size:.69rem;color:#475569;text-transform:uppercase;letter-spacing:.08em}
+
+/* ══════════════════════════════════════════
+   MOBILNÍ RESPONZIVITA  (max-width: 640px)
+   ══════════════════════════════════════════ */
+@media (max-width: 640px) {
+
+  /* Hlavní obsah – zmenšit horizontální padding */
+  .block-container{padding-left:12px!important;padding-right:12px!important;padding-top:16px!important}
+
+  /* ── Brand / Login ── */
+  .brand-wrap{padding:24px 0 14px}
+  .brand-logo{font-size:44px}
+  .brand-title{
+    font-size:2rem!important;
+    white-space:normal!important;
+    word-break:break-word!important;
+    overflow-wrap:break-word!important;
+    line-height:1.15!important
+  }
+  .brand-sub{font-size:.88rem;margin:6px 0 18px}
+  .feat-grid{padding:14px 16px}
+  .feat-row{font-size:.8rem;gap:7px}
+
+  /* ── Nadpisy sekcí ── */
+  h1{font-size:1.5rem!important}
+  h2{font-size:1.2rem!important}
+  h3{font-size:1rem!important}
+  .sec-title{font-size:1rem!important}
+
+  /* ── Stats karty – 1 sloupec na velmi malých, 3 na větších mobilech ── */
+  .stats-row{grid-template-columns:repeat(3,1fr)!important;gap:7px!important}
+  .sc{padding:11px 8px!important}
+  .sc-val{font-size:1.05rem!important}
+  .sc-lbl{font-size:.58rem!important}
+
+  /* ── Mini row (klient stats) ── */
+  .mini-row{grid-template-columns:repeat(3,1fr)!important;gap:6px!important}
+  .mini-sc{padding:9px 6px!important}
+  .mini-val{font-size:.88rem!important}
+
+  /* ── Admin grid – 2×2 ── */
+  .adm-grid{grid-template-columns:repeat(2,1fr)!important}
+
+  /* ── Cashflow grid – 1 sloupec ── */
+  .cf-grid{grid-template-columns:1fr!important;gap:8px!important}
+
+  /* ── Overdue panel – lepší zarovnání na malé obrazovce ── */
+  .overdue-header{flex-wrap:wrap;gap:6px}
+  .overdue-row{flex-direction:column;align-items:flex-start;gap:4px}
+  .overdue-amount,.overdue-days{text-align:left!important}
+
+  /* ── Total line – neskrývat text ── */
+  .total-ln{padding:11px 13px}
+  .total-amt{font-size:1rem!important}
+
+  /* ── Daňové karty – pod sebou ── */
+  .tax-c{padding:16px!important}
+  .tax-amt{font-size:1.5rem!important}
+
+  /* ── Pro card ── */
+  .pro-feat-row{grid-template-columns:1fr!important}
+
+  /* ── Opakované karty ── */
+  .recur-card{flex-direction:column!important;align-items:flex-start!important;gap:10px!important}
+
+  /* ── Quote karta ── */
+  .quote-header{flex-direction:column!important;align-items:flex-start!important;gap:6px!important}
+  .quote-amt{text-align:left!important}
+
+  /* ── Cashflow řádky ── */
+  .cf-row{flex-direction:column!important;align-items:flex-start!important;gap:3px!important}
+  .cf-row-amt{text-align:left!important}
+
+  /* ── Tlačítka – správná výška na dotykovém displeji ── */
+  .stButton>button{height:48px!important;font-size:.82rem!important}
+  div[data-testid="stForm"] button[kind="primary"]{height:48px!important}
+
+  /* ── Inputy – větší font pro mobil (iOS nezoomuje při ≥16px) ── */
+  .stTextInput input,.stNumberInput input,.stTextArea textarea,.stDateInput input{
+    font-size:16px!important;padding:12px 13px!important
+  }
+
+  /* ── Sidebar – zmenšit padding ── */
+  section[data-testid="stSidebar"]{padding:8px!important}
+  section[data-testid="stSidebar"] .stRadio label{padding:10px 12px!important}
+
+  /* ── Expander ── */
+  div[data-testid="stExpander"]{margin-bottom:7px!important}
+
+  /* ── Timer ── */
+  .timer-display{font-size:2.6rem!important}
+  .timer-card{padding:16px!important}
+
+  /* ── Sec header ── */
+  .sec-hdr{margin-bottom:14px!important;padding-bottom:10px!important}
+  .sec-ico{width:28px!important;height:28px!important;font-size:.8rem!important}
+
+  /* ── Callout ── */
+  .callout{font-size:.8rem!important;padding:9px 12px!important}
+
+  /* ── Tag chips ── */
+  .tpl-grid{gap:6px}
+  .tpl-chip{padding:6px 10px!important;font-size:.75rem!important}
+}
 </style>
 """, unsafe_allow_html=True)
 
