@@ -833,9 +833,18 @@ def generate_pdf(fid, uid, is_pro, template=1):
             pdf.set_font(fn,'',6.5); pdf.set_text_color(160,170,185)
             pdf.set_xy(MX,287); pdf.cell(MW,5," · ".join(x for x in fparts if x),0,0,'L')
 
-        return pdf.output(dest='S').encode('latin-1')
+        try:
+            out = pdf.output(dest='S')
+        except TypeError:
+            out = pdf.output()
+            
+        if isinstance(out, str):
+            return out.encode('latin-1')
+        return bytes(out)
+        
     except Exception as e:
-        print(f"PDF error: {e}"); return None
+        print(f"PDF error: {e}")
+        return str(e)
 
 def generate_isdoc(fid,uid):
     data=run_query("SELECT f.*,k.jmeno,k.ico,k.adresa,m.nazev as m_nazev,m.ico as m_ico FROM faktury f JOIN klienti k ON f.klient_id=k.id JOIN nastaveni m ON f.user_id=m.user_id WHERE f.id=?",(fid,),True)
@@ -1143,9 +1152,13 @@ else:
                     last_full = st.session_state['last_invoice_full']
                     _tpl = get_nastaveni(uid).get('faktura_sablona',1) or 1
                     pdf_out = cached_pdf(last_fid, uid, is_pro, _tpl, f"new_{last_fid}_{_tpl}")
+                    
                     if isinstance(pdf_out, bytes):
                         st.success(f"Faktura {last_full} byla úspěšně vystavena!")
                         st.download_button("↓ Stáhnout PDF ihned", pdf_out, f"{last_full}.pdf", "application/pdf")
+                    else:
+                        st.error(f"⚠️ Chyba PDF: {pdf_out}")
+                        
                     if st.button("✖ Skrýt zprávu"):
                         del st.session_state['last_invoice_id']
                         del st.session_state['last_invoice_full']
@@ -1190,15 +1203,15 @@ else:
                 else:
                     if c1.button("✓ Zaplaceno",key=f"u1_{row['id']}"): run_command("UPDATE faktury SET uhrazeno=1 WHERE id=?",(row['id'],)); cached_pdf.clear(); cached_isdoc.clear(); st.rerun()
                 
-                # ------ Úprava tlačítka PDF ------
+                # ------ Ošetření a vykreslení PDF tlačítka ------
                 _tpl=get_nastaveni(uid).get('faktura_sablona',1) or 1
                 rh=str(row)+str(_tpl); pdf_out=cached_pdf(row['id'],uid,is_pro,_tpl,rh)
                 
-                if isinstance(pdf_out,bytes): 
+                if isinstance(pdf_out, bytes): 
                     c2.download_button("↓ Stáhnout PDF", pdf_out, f"{cf}.pdf", "application/pdf", key=f"pdf_{row['id']}", type="primary")
                 else:
-                    c2.error("⚠️ Nelze vygenerovat PDF")
-                # ---------------------------------
+                    c2.error(f"⚠️ Nelze vygenerovat: {pdf_out}")
+                # ------------------------------------------------
                 
                 if is_pro:
                     isdoc_b=cached_isdoc(row['id'],uid,rh)
