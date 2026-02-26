@@ -36,7 +36,7 @@ FONT_FILE = 'arial.ttf'
 # ── PAGE CONFIG ──
 st.set_page_config(page_title="MojeFaktury", page_icon="💎", layout="centered")
 
-# ── CSS ──
+# ── CSS (základní – načítá se vždy, i na login stránce) ──
 st.markdown("""
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -191,65 +191,6 @@ hr{border-color:rgba(255,255,255,.055)!important;margin:1.4rem 0!important}
 .adm-card{background:rgba(255,255,255,.022);border:1px solid rgba(255,255,255,.07);border-radius:13px;padding:17px 14px;text-align:center}
 .adm-val{font-family:'Syne',sans-serif;font-size:1.45rem;font-weight:800;color:#f1f5f9;margin-bottom:4px}
 .adm-lbl{font-size:.69rem;color:#475569;text-transform:uppercase;letter-spacing:.08em}
-
-/* ── TIMER ── */
-.timer-display{font-family:'Syne',sans-serif;font-size:3.5rem;font-weight:800;text-align:center;
-  color:#fbbf24;letter-spacing:.05em;margin:16px 0;
-  text-shadow:0 0 40px rgba(251,191,36,.3)}
-.timer-card{background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.2);
-  border-radius:16px;padding:24px;text-align:center;margin-bottom:16px}
-.timer-label{font-size:.75rem;color:#64748b;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px}
-
-/* ── RECURRING ── */
-.recur-card{background:rgba(99,102,241,.06);border:1px solid rgba(99,102,241,.2);
-  border-radius:14px;padding:16px 18px;margin-bottom:10px;
-  display:flex;justify-content:space-between;align-items:center}
-.recur-name{font-family:'Syne',sans-serif;font-size:.95rem;font-weight:700;color:#f1f5f9}
-.recur-meta{font-size:.78rem;color:#64748b;margin-top:2px}
-.recur-badge{background:rgba(99,102,241,.2);border:1px solid rgba(99,102,241,.35);
-  border-radius:20px;padding:3px 10px;font-size:.7rem;font-weight:700;color:#818cf8;letter-spacing:.04em}
-
-/* ── TEMPLATE CHIP ── */
-.tpl-grid{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
-.tpl-chip{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);
-  border-radius:8px;padding:7px 12px;font-size:.8rem;color:#94a3b8;cursor:pointer;
-  transition:all .15s}
-.tpl-chip:hover{background:rgba(251,191,36,.1);border-color:rgba(251,191,36,.3);color:#fbbf24}
-.tpl-chip .price{color:#475569;margin-left:6px;font-size:.75rem}
-
-/* ── QUOTE / NABÍDKA ── */
-.quote-card{background:rgba(99,102,241,.06);border:1px solid rgba(99,102,241,.18);
-  border-radius:14px;padding:16px 18px;margin-bottom:10px}
-.quote-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
-.quote-num{font-family:'Syne',sans-serif;font-size:1rem;font-weight:700;color:#a5b4fc}
-.quote-client{font-size:.8rem;color:#64748b;margin-top:2px}
-.quote-amt{font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:800;color:#a5b4fc;text-align:right}
-.q-tag{display:inline-block;padding:2px 9px;border-radius:20px;font-size:.69rem;font-weight:600;letter-spacing:.04em}
-.q-open{background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.25);color:#a5b4fc}
-.q-accepted{background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.22);color:#34d399}
-.q-declined{background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.22);color:#f87171}
-.q-invoiced{background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.22);color:#fbbf24}
-
-/* ── CASHFLOW ── */
-.cf-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:16px 0}
-.cf-card{background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:16px;text-align:center}
-.cf-card.pos{border-color:rgba(52,211,153,.2);background:rgba(52,211,153,.04)}
-.cf-card.neg{border-color:rgba(248,113,113,.2);background:rgba(248,113,113,.04)}
-.cf-lbl{font-size:.65rem;color:#334155;text-transform:uppercase;letter-spacing:.09em;font-weight:600;margin-bottom:6px}
-.cf-val{font-family:'Syne',sans-serif;font-size:1.25rem;font-weight:800}
-.cf-val.pos{color:#34d399}
-.cf-val.neg{color:#f87171}
-.cf-val.neu{color:#fbbf24}
-.cf-sub{font-size:.7rem;color:#1e293b;margin-top:3px}
-.cf-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04)}
-.cf-row:last-child{border-bottom:none}
-.cf-row-name{font-size:.82rem;color:#94a3b8}
-.cf-row-due{font-size:.72rem;color:#475569;margin-top:2px}
-.cf-row-amt{font-family:'Syne',sans-serif;font-size:.9rem;font-weight:700;text-align:right}
-.cf-section-hdr{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#334155;padding:10px 0 4px;border-bottom:1px solid rgba(255,255,255,.06)}
-
-/* ── REMINDER SENT ── */
-.reminder-ok{background:rgba(52,211,153,.07);border:1px solid rgba(52,211,153,.2);border-radius:9px;padding:10px 14px;font-size:.83rem;color:#34d399;margin:6px 0}
 </style>
 """, unsafe_allow_html=True)
 
@@ -300,7 +241,6 @@ def init_db():
             c.execute("CREATE TABLE IF NOT EXISTS licencni_klice (id SERIAL PRIMARY KEY, kod TEXT UNIQUE, dny_platnosti INTEGER, vygenerovano TEXT, pouzito_uzivatelem_id INTEGER, poznamka TEXT)")
             c.execute("CREATE TABLE IF NOT EXISTS email_templates (id SERIAL PRIMARY KEY, name TEXT UNIQUE, subject TEXT, body TEXT)")
             c.execute("CREATE TABLE IF NOT EXISTS vydaje (id SERIAL PRIMARY KEY, user_id INTEGER, datum TEXT, popis TEXT, castka REAL, kategorie TEXT)")
-            # NEW TABLES
             c.execute("CREATE TABLE IF NOT EXISTS casovac (id SERIAL PRIMARY KEY, user_id INTEGER, projekt TEXT, klient_id INTEGER, start_ts TEXT, end_ts TEXT, trvani_min REAL, sazba REAL DEFAULT 500, fakturovano INTEGER DEFAULT 0, poznamka TEXT)")
             c.execute("CREATE TABLE IF NOT EXISTS opakujici (id SERIAL PRIMARY KEY, user_id INTEGER, nazev TEXT, klient_id INTEGER, kategorie_id INTEGER, interval_typ TEXT DEFAULT 'mesicne', posledni_vytvoreni TEXT, aktivni INTEGER DEFAULT 1, uvodni_text TEXT, polozky_json TEXT)")
             c.execute("CREATE TABLE IF NOT EXISTS item_sablony (id SERIAL PRIMARY KEY, user_id INTEGER, nazev TEXT, cena REAL)")
@@ -408,15 +348,6 @@ def export_data(uid):
     finally: p.putconn(conn)
     return json.dumps(out,default=str)
 
-# ══════════════════════════════════════════════════════════
-# ✨ KRÁSNÁ FAKTURA v3 – Modern Sidebar Layout
-#    • Barevný levý sidebar (30 mm) s logem a VS
-#    • Čistá bílá plocha – žádné border-borders na položkách
-#    • Velké číslo faktury nad odběratelem
-#    • Platební box s QR kódem v pravém rohu
-#    • Vodoznak ZAPLACENO diagonálně pro uhrazené
-#    • Accent-colored footer gradient
-# ══════════════════════════════════════════════════════════
 def generate_pdf(fid, uid, is_pro, paid=False):
     use_font = os.path.exists(FONT_FILE)
     def tx(t): return rm_acc(str(t)) if t else ""
@@ -438,22 +369,19 @@ def generate_pdf(fid, uid, is_pro, paid=False):
 
         paid = bool(data.get('uhrazeno', 0))
 
-        # ── Barva akcentu ──────────────────────────────
-        ar, ag, ab = 15, 23, 42   # Navy dark default
+        ar, ag, ab = 15, 23, 42
         if data.get('barva'):
             try:
                 cv = data['barva'].lstrip('#')
                 ar, ag, ab = tuple(int(cv[i:i+2],16) for i in (0,2,4))
             except: pass
 
-        # Světlejší varianta pro pruhy
         def lc(c, amount=180): return min(c + amount, 255)
-        lr, lg, lb = lc(ar,190), lc(ag,190), lc(ab,190)   # very light tint
-        mr, mg, mb = lc(ar,120), lc(ag,120), lc(ab,120)   # medium tint
+        lr, lg, lb = lc(ar,190), lc(ag,190), lc(ab,190)
+        mr, mg, mb = lc(ar,120), lc(ag,120), lc(ab,120)
 
         cf = data.get('cislo_full') or f"{data.get('prefix','')}{data.get('cislo','')}"
 
-        # ── PDF třída ─────────────────────────────────
         class PDF(FPDF):
             def __init__(self):
                 super().__init__()
@@ -471,18 +399,13 @@ def generate_pdf(fid, uid, is_pro, paid=False):
         fn = pdf.fn
         PAGE_W = 210
 
-        # ══════════════════════════════════════════════
-        # SIDEBAR  (0–32 mm horizontally, full height)
-        # ══════════════════════════════════════════════
-        SB = 32   # sidebar width
+        SB = 32
         pdf.set_fill_color(ar, ag, ab)
         pdf.rect(0, 0, SB, 297, 'F')
 
-        # Subtle lighter stripe along sidebar right edge
         pdf.set_fill_color(lc(ar,30), lc(ag,30), lc(ab,30))
         pdf.rect(SB-1, 0, 1, 297, 'F')
 
-        # Logo in sidebar top
         logo_placed = False
         if data.get('logo_blob'):
             try:
@@ -492,7 +415,6 @@ def generate_pdf(fid, uid, is_pro, paid=False):
                 logo_placed = True
             except: pass
 
-        # "MF" monogram if no logo
         if not logo_placed:
             pdf.set_fill_color(lc(ar,25), lc(ag,25), lc(ab,25))
             pdf.rect(6, 8, 20, 20, 'F')
@@ -500,11 +422,9 @@ def generate_pdf(fid, uid, is_pro, paid=False):
             co = tx(moje.get('nazev',''))[:2].upper()
             pdf.set_xy(6, 12); pdf.cell(20, 12, co, 0, 0, 'C')
 
-        # Divider line in sidebar
         pdf.set_fill_color(lc(ar,18), lc(ag,18), lc(ab,18))
         pdf.rect(5, 34, SB-10, 0.5, 'F')
 
-        # Sidebar labels
         def sidebar_label(y, label, value, value_size=8):
             pdf.set_font(fn,'',6.5); pdf.set_text_color(mr, mg, mb)
             pdf.set_xy(4, y); pdf.cell(SB-8, 4, label.upper(), 0, 1, 'L')
@@ -519,7 +439,6 @@ def generate_pdf(fid, uid, is_pro, paid=False):
         if vs_val:
             sidebar_label(sy, "VS", vs_val, 7.5); sy += 13
 
-        # Payment method in sidebar
         if moje.get('ucet') or moje.get('iban'):
             pdf.set_fill_color(lc(ar,15), lc(ag,15), lc(ab,15))
             pdf.rect(3, sy+2, SB-6, 0.4, 'F'); sy += 7
@@ -527,7 +446,6 @@ def generate_pdf(fid, uid, is_pro, paid=False):
             if moje.get('banka'):
                 sidebar_label(sy, "Banka", tx(moje['banka']), 7); sy += 13
 
-        # Sidebar bottom: company
         pdf.set_fill_color(lc(ar,15), lc(ag,15), lc(ab,15))
         pdf.rect(3, 255, SB-6, 0.4, 'F')
         pdf.set_font(fn,'B',7); pdf.set_text_color(255,255,255)
@@ -538,35 +456,26 @@ def generate_pdf(fid, uid, is_pro, paid=False):
             pdf.set_font(fn,'',6); pdf.set_text_color(mr,mg,mb)
             pdf.set_xy(4, pdf.get_y()); pdf.cell(SB-8, 4, tx(f"IC: {moje['ico']}"), 0, 1, 'L')
 
-        # ══════════════════════════════════════════════
-        # MAIN AREA  (x=36 onwards, margin 6 mm right)
-        # ══════════════════════════════════════════════
-        MX = SB + 8   # main content left margin
-        MW = PAGE_W - MX - 8  # main content width (~162 mm)
+        MX = SB + 8
+        MW = PAGE_W - MX - 8
 
-        # ── TOP RIGHT: FAKTURA heading ─────────────────
         pdf.set_font(fn,'B',36); pdf.set_text_color(ar, ag, ab)
         pdf.set_xy(MX, 10)
         pdf.cell(MW, 16, "FAKTURA", 0, 1, 'R')
 
-        # Thin accent underline
         pdf.set_draw_color(ar, ag, ab); pdf.set_line_width(0.5)
         pdf.line(MX, 28, PAGE_W-8, 28); pdf.set_line_width(0.2)
 
-        # ── PARTIES ────────────────────────────────────
-        # "Dodavatel" block (left side of main area)
         DOD_W = MW // 2 - 4; ODB_X = MX + DOD_W + 8
 
         pdf.set_font(fn,'B',6.5); pdf.set_text_color(ar, ag, ab)
         pdf.set_xy(MX, 32); pdf.cell(DOD_W, 4, "DODAVATEL", 0, 0, 'L')
         pdf.set_xy(ODB_X, 32); pdf.cell(DOD_W, 4, "ODBERATEL", 0, 1, 'L')
 
-        # Names
         pdf.set_font(fn,'B',10); pdf.set_text_color(10, 18, 35)
         pdf.set_xy(MX, 38); pdf.cell(DOD_W, 6, tx(moje.get('nazev',''))[:32], 0, 0, 'L')
         pdf.set_xy(ODB_X, 38); pdf.cell(DOD_W, 6, tx(data.get('k_jmeno',''))[:32], 0, 1, 'L')
 
-        # Details
         pdf.set_font(fn,'',8); pdf.set_text_color(80, 95, 115)
         dod_lines = []
         if moje.get('adresa'): dod_lines.append(tx(moje['adresa']))
@@ -588,7 +497,6 @@ def generate_pdf(fid, uid, is_pro, paid=False):
             pdf.set_xy(ODB_X, py); pdf.cell(DOD_W, 5, ol, 0, 1, 'L')
             py += 5
 
-        # ── Optional intro text ────────────────────────
         if data.get('uvodni_text'):
             pdf.set_y(py + 3)
             pdf.set_x(MX)
@@ -596,13 +504,9 @@ def generate_pdf(fid, uid, is_pro, paid=False):
             pdf.multi_cell(MW, 4.5, tx(data['uvodni_text']))
             py = pdf.get_y()
 
-        # ══════════════════════════════════════════════
-        # ITEMS TABLE  (borderless, clean row shading)
-        # ══════════════════════════════════════════════
         TBL_Y = max(py + 8, 90)
         pdf.set_y(TBL_Y)
 
-        # Table header row
         pdf.set_fill_color(ar, ag, ab)
         pdf.set_text_color(255, 255, 255)
         pdf.set_font(fn,'B',8.5)
@@ -611,7 +515,6 @@ def generate_pdf(fid, uid, is_pro, paid=False):
         pdf.cell(COL_DESC, 8, "POPIS POLOZKY", 0, 0, 'L', True)
         pdf.cell(COL_PRICE, 8, "CENA (Kc)", 0, 1, 'R', True)
 
-        # Item rows – no borders, alternating fill
         alt = False
         for item in pol:
             if not item.get('nazev'): continue
@@ -624,18 +527,13 @@ def generate_pdf(fid, uid, is_pro, paid=False):
             pdf.cell(COL_PRICE, 7.5, fp(item.get('cena',0)), 0, 1, 'R', True)
             alt = not alt
 
-        # Thin separator line after items
         pdf.set_draw_color(ar, ag, ab); pdf.set_line_width(0.3)
         pdf.line(MX, pdf.get_y(), PAGE_W-8, pdf.get_y())
 
-        # ══════════════════════════════════════════════
-        # TOTAL + QR block (side by side)
-        # ══════════════════════════════════════════════
         BLOCK_Y = pdf.get_y() + 5
         TOTAL_BOX_W = 75; QR_BOX_W = 44
-        TOTAL_X = PAGE_W - 8 - TOTAL_BOX_W   # right-aligned total box
+        TOTAL_X = PAGE_W - 8 - TOTAL_BOX_W
 
-        # Total box
         pdf.set_fill_color(ar, ag, ab)
         pdf.rect(TOTAL_X, BLOCK_Y, TOTAL_BOX_W, 18, 'F')
         pdf.set_font(fn,'',7.5); pdf.set_text_color(mr, mg, mb)
@@ -644,21 +542,16 @@ def generate_pdf(fid, uid, is_pro, paid=False):
         total_str = fp(data.get('castka_celkem',0)) + " Kc"
         pdf.set_xy(TOTAL_X, BLOCK_Y+7); pdf.cell(TOTAL_BOX_W-4, 10, total_str, 0, 0, 'R')
 
-        # QR code platba
         if moje.get('iban'):
             try:
                 ic  = str(moje['iban']).replace(" ","").upper()
                 vs  = str(data.get('variabilni_symbol',''))
                 qr_str = f"SPD*1.0*ACC:{ic}*AM:{data.get('castka_celkem')}*CC:CZK*X-VS:{vs}*MSG:{rm_acc('Faktura '+cf)}"
-
-                # Make QR with border
                 qr_img = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=6, border=2)
                 qr_img.add_data(qr_str); qr_img.make(fit=True)
                 q = qr_img.make_image(fill_color="black", back_color="white")
                 qf = f"q_{fid}.png"; q.save(qf)
-
                 QR_X = TOTAL_X - QR_BOX_W - 5
-                # QR box background
                 pdf.set_fill_color(248, 249, 251)
                 pdf.rect(QR_X, BLOCK_Y, QR_BOX_W, 24, 'F')
                 pdf.image(qf, QR_X+2, BLOCK_Y+2, 20); os.remove(qf)
@@ -669,23 +562,15 @@ def generate_pdf(fid, uid, is_pro, paid=False):
                 pdf.set_xy(QR_X+23, BLOCK_Y+17); pdf.cell(19, 3.5, "aplikaci", 0, 1, 'L')
             except: pass
 
-        # ══════════════════════════════════════════════
-        # WATERMARK  "ZAPLACENO" for paid invoices
-        # ══════════════════════════════════════════════
         if paid:
             pdf.set_font(fn,'B',52)
-            # Semi-transparent green diagonal text (FPDF doesn't support alpha natively, use light color)
             pdf.set_text_color(180, 240, 200)
             pdf.set_xy(50, 130)
             pdf.rotate(35)
             pdf.cell(0, 0, "ZAPLACENO", 0, 0, 'C')
             pdf.rotate(0)
-            pdf.set_text_color(0, 0, 0)  # reset
+            pdf.set_text_color(0, 0, 0)
 
-        # ══════════════════════════════════════════════
-        # FOOTER (colored bar at bottom)
-        # ══════════════════════════════════════════════
-        # Accent footer strip
         pdf.set_fill_color(ar, ag, ab)
         pdf.rect(SB, 286, PAGE_W-SB, 11, 'F')
 
@@ -701,7 +586,6 @@ def generate_pdf(fid, uid, is_pro, paid=False):
     except Exception as e:
         print(f"PDF error: {e}"); return None
 
-# ── ISDOC ──
 def generate_isdoc(fid,uid):
     data=run_query("SELECT f.*,k.jmeno,k.ico,k.adresa,m.nazev as m_nazev,m.ico as m_ico FROM faktury f JOIN klienti k ON f.klient_id=k.id JOIN nastaveni m ON f.user_id=m.user_id WHERE f.id=?",(fid,),True)
     if not data: return None
@@ -796,6 +680,73 @@ if not st.session_state.user_id:
     st.stop()
 
 # ══════════════════════════════════════════════
+# CSS pro přihlášené uživatele – načítá se AŽ po přihlášení,
+# takže se NIKDY neobjeví jako viditelný text na login stránce.
+# ══════════════════════════════════════════════
+st.markdown("""
+<style>
+/* ── TIMER ── */
+.timer-display{font-family:'Syne',sans-serif;font-size:3.5rem;font-weight:800;text-align:center;
+  color:#fbbf24;letter-spacing:.05em;margin:16px 0;
+  text-shadow:0 0 40px rgba(251,191,36,.3)}
+.timer-card{background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.2);
+  border-radius:16px;padding:24px;text-align:center;margin-bottom:16px}
+.timer-label{font-size:.75rem;color:#64748b;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px}
+
+/* ── RECURRING ── */
+.recur-card{background:rgba(99,102,241,.06);border:1px solid rgba(99,102,241,.2);
+  border-radius:14px;padding:16px 18px;margin-bottom:10px;
+  display:flex;justify-content:space-between;align-items:center}
+.recur-name{font-family:'Syne',sans-serif;font-size:.95rem;font-weight:700;color:#f1f5f9}
+.recur-meta{font-size:.78rem;color:#64748b;margin-top:2px}
+.recur-badge{background:rgba(99,102,241,.2);border:1px solid rgba(99,102,241,.35);
+  border-radius:20px;padding:3px 10px;font-size:.7rem;font-weight:700;color:#818cf8;letter-spacing:.04em}
+
+/* ── TEMPLATE CHIP ── */
+.tpl-grid{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.tpl-chip{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);
+  border-radius:8px;padding:7px 12px;font-size:.8rem;color:#94a3b8;cursor:pointer;
+  transition:all .15s}
+.tpl-chip:hover{background:rgba(251,191,36,.1);border-color:rgba(251,191,36,.3);color:#fbbf24}
+.tpl-chip .price{color:#475569;margin-left:6px;font-size:.75rem}
+
+/* ── QUOTE / NABÍDKA ── */
+.quote-card{background:rgba(99,102,241,.06);border:1px solid rgba(99,102,241,.18);
+  border-radius:14px;padding:16px 18px;margin-bottom:10px}
+.quote-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.quote-num{font-family:'Syne',sans-serif;font-size:1rem;font-weight:700;color:#a5b4fc}
+.quote-client{font-size:.8rem;color:#64748b;margin-top:2px}
+.quote-amt{font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:800;color:#a5b4fc;text-align:right}
+.q-tag{display:inline-block;padding:2px 9px;border-radius:20px;font-size:.69rem;font-weight:600;letter-spacing:.04em}
+.q-open{background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.25);color:#a5b4fc}
+.q-accepted{background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.22);color:#34d399}
+.q-declined{background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.22);color:#f87171}
+.q-invoiced{background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.22);color:#fbbf24}
+
+/* ── CASHFLOW ── */
+.cf-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:16px 0}
+.cf-card{background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:16px;text-align:center}
+.cf-card.pos{border-color:rgba(52,211,153,.2);background:rgba(52,211,153,.04)}
+.cf-card.neg{border-color:rgba(248,113,113,.2);background:rgba(248,113,113,.04)}
+.cf-lbl{font-size:.65rem;color:#334155;text-transform:uppercase;letter-spacing:.09em;font-weight:600;margin-bottom:6px}
+.cf-val{font-family:'Syne',sans-serif;font-size:1.25rem;font-weight:800}
+.cf-val.pos{color:#34d399}
+.cf-val.neg{color:#f87171}
+.cf-val.neu{color:#fbbf24}
+.cf-sub{font-size:.7rem;color:#1e293b;margin-top:3px}
+.cf-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+.cf-row:last-child{border-bottom:none}
+.cf-row-name{font-size:.82rem;color:#94a3b8}
+.cf-row-due{font-size:.72rem;color:#475569;margin-top:2px}
+.cf-row-amt{font-family:'Syne',sans-serif;font-size:.9rem;font-weight:700;text-align:right}
+.cf-section-hdr{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#334155;padding:10px 0 4px;border-bottom:1px solid rgba(255,255,255,.06)}
+
+/* ── REMINDER SENT ── */
+.reminder-ok{background:rgba(52,211,153,.07);border:1px solid rgba(52,211,153,.2);border-radius:9px;padding:10px 14px;font-size:.83rem;color:#34d399;margin:6px 0}
+</style>
+""", unsafe_allow_html=True)
+
+# ══════════════════════════════════════════════
 # APP
 # ══════════════════════════════════════════════
 uid=st.session_state.user_id; role=st.session_state.role; is_pro=st.session_state.is_pro
@@ -885,7 +836,6 @@ else:
     if "Faktury" in menu:
         st.markdown('<div class="sec-hdr"><div class="sec-ico">📄</div><div class="sec-title">Faktury</div></div>',unsafe_allow_html=True)
 
-        # Overdue alert
         overdue=run_query("SELECT f.id,f.cislo_full,f.datum_splatnosti,f.castka_celkem,k.jmeno FROM faktury f JOIN klienti k ON f.klient_id=k.id WHERE f.user_id=? AND f.uhrazeno=0 AND f.datum_splatnosti < ? ORDER BY f.datum_splatnosti ASC",(uid,date.today().isoformat()))
         if overdue:
             tot_ov=sum(r['castka_celkem'] for r in overdue)
@@ -896,7 +846,6 @@ else:
                 rows+=f'<div class="overdue-row"><div><div class="overdue-name">{r["jmeno"]} <span style="color:#334155;font-size:.75rem">{r.get("cislo_full","")}</span></div><div class="overdue-detail">Splatnost: {fmt_d(r["datum_splatnosti"])}</div></div><div><div class="overdue-amount">{r["castka_celkem"]:,.0f} Kč</div><div class="overdue-days">{dlt}</div></div></div>'
             st.markdown(f'<div class="overdue-panel"><div class="overdue-header"><span>⚠️</span><span class="overdue-title">Pohledávky po splatnosti</span><span class="overdue-count">{len(overdue)}</span><span style="margin-left:auto;font-family:Syne,sans-serif;font-weight:800;color:#f87171">{tot_ov:,.0f} Kč</span></div>{rows}</div>',unsafe_allow_html=True)
 
-        # Stats
         years=[r['substring'] for r in run_query("SELECT DISTINCT SUBSTRING(datum_vystaveni,1,4) as substring FROM faktury WHERE user_id=?",(uid,))]
         if str(datetime.now().year) not in years: years.append(str(datetime.now().year))
         sy=st.selectbox("Rok",sorted(list(set(years)),reverse=True),label_visibility="collapsed")
@@ -905,13 +854,11 @@ else:
         su_a=run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=? AND uhrazeno=0",(uid,),True)['sum'] or 0
         st.markdown(f'<div class="stats-row"><div class="sc g"><div class="sc-lbl">Obrat {sy}</div><div class="sc-val g">{sc_y:,.0f}</div><div class="sc-sub">Kč</div></div><div class="sc a"><div class="sc-lbl">Celkem</div><div class="sc-val a">{sc_a:,.0f}</div><div class="sc-sub">Kč</div></div><div class="sc r"><div class="sc-lbl">Neuhrazeno</div><div class="sc-val r">{su_a:,.0f}</div><div class="sc-sub">Kč</div></div></div>',unsafe_allow_html=True)
 
-        # Šablony položek – quick chips
         sablony=run_query("SELECT * FROM item_sablony WHERE user_id=?",(uid,))
         if sablony:
             chips="".join(f'<span class="tpl-chip" title="Klikněte pro přidání"><b>{s["nazev"]}</b><span class="price">{s["cena"]:,.0f} Kč</span></span>' for s in sablony)
             st.markdown(f'<div class="callout">💡 Uložené šablony položek: <span>klikněte v editoru nebo přidejte ručně</span></div><div class="tpl-grid">{chips}</div>',unsafe_allow_html=True)
 
-        # Nová faktura
         with st.expander("➕  Nová faktura"):
             pp=get_pool(); conn=pp.getconn()
             try:
@@ -982,7 +929,6 @@ else:
                 if is_pro:
                     isdoc_b=cached_isdoc(row['id'],uid,rh)
                     if isdoc_b: c2.download_button("↓ ISDOC",isdoc_b,f"{cf}.isdoc","application/xml",key=f"isd_{row['id']}")
-                # ── Platební upomínka jedním kliknutím ──
                 klient_info=run_query("SELECT email,jmeno FROM klienti WHERE id=?",(row['klient_id'],),single=True)
                 klient_email=dict(klient_info).get('email','') if klient_info else ''
                 if not paid and klient_email:
@@ -1020,7 +966,7 @@ else:
                 if st.button("🗑 Smazat",key=f"del_f_{row['id']}"): run_command("DELETE FROM faktury WHERE id=?",(row['id'],)); cached_pdf.clear(); cached_isdoc.clear(); st.rerun()
 
     # ════════════════════════════════
-    # 📋 CENOVÉ NABÍDKY  (NOVÁ FUNKCE)
+    # NABÍDKY
     # ════════════════════════════════
     elif "Nabídky" in menu:
         st.markdown('<div class="sec-hdr"><div class="sec-ico">📋</div><div class="sec-title">Cenové nabídky</div></div>',unsafe_allow_html=True)
@@ -1066,7 +1012,6 @@ else:
         for nb in nabs:
             nb=dict(nb)
             ico_s,lbl_s,cls_s=stav_map.get(nb.get('stav','otevrena'),("🔵","?","q-open"))
-            # Check expiry
             expired=""
             try:
                 if datetime.strptime(str(nb['datum_platnosti'])[:10],'%Y-%m-%d').date()<date.today() and nb.get('stav')=='otevrena':
@@ -1084,11 +1029,8 @@ else:
 </div>""",unsafe_allow_html=True)
             with st.expander(f"  Detaily nabídky {nb.get('cislo_full','')}"):
                 c1,c2,c3,c4=st.columns(4)
-                # Stav update
                 new_stav=c1.selectbox("Stav",["otevrena","prijata","odmitnuta"],format_func=lambda x:{"otevrena":"Otevřená","prijata":"Přijata","odmitnuta":"Odmítnuta","fakturovana":"Fakturována"}[x],index=["otevrena","prijata","odmitnuta"].index(nb.get('stav','otevrena')) if nb.get('stav') in ["otevrena","prijata","odmitnuta"] else 0,key=f"nst_{nb['id']}")
                 if c2.button("Uložit stav",key=f"nst_save_{nb['id']}"): run_command("UPDATE nabidky SET stav=? WHERE id=?",(new_stav,nb['id'])); st.rerun()
-
-                # Převod na fakturu
                 if nb.get('stav') in ('otevrena','prijata') and not nb.get('faktura_id'):
                     if c3.button("→ Převést na fakturu",key=f"nab2fak_{nb['id']}",type="primary"):
                         kat_all=run_query("SELECT * FROM kategorie WHERE user_id=?",(uid,))
@@ -1106,17 +1048,14 @@ else:
                             cached_pdf.clear(); st.success(f"Faktura {fnum} vystavena!"); st.rerun()
                 elif nb.get('faktura_id'):
                     c3.info(f"Faktura #{nb['faktura_id']}")
-
                 if c4.button("🗑 Smazat",key=f"del_nab_{nb['id']}"): run_command("DELETE FROM nabidky WHERE id=?",(nb['id'],)); run_command("DELETE FROM nabidka_polozky WHERE nabidka_id=?",(nb['id'],)); st.rerun()
-
-                # Show items
                 nab_its=run_query("SELECT * FROM nabidka_polozky WHERE nabidka_id=?",(nb['id'],)) or []
                 if nab_its:
                     for it in nab_its: st.markdown(f"- {it['nazev']} — **{it['cena']:,.0f} Kč**")
                 if nb.get('poznamka'): st.caption(f"Poznámka: {nb['poznamka']}")
 
     # ════════════════════════════════
-    # 💰 CASHFLOW PROGNÓZA  (NOVÁ FUNKCE)
+    # CASHFLOW
     # ════════════════════════════════
     elif "Cashflow" in menu:
         st.markdown('<div class="sec-hdr"><div class="sec-ico">💰</div><div class="sec-title">Cashflow & Prognóza</div></div>',unsafe_allow_html=True)
@@ -1124,8 +1063,6 @@ else:
 
         today = date.today()
 
-        # ── Souhrnné karty ──────────────────────
-        # Expected income in 30/60/90 days
         inc_30=run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=? AND uhrazeno=0 AND datum_splatnosti BETWEEN ? AND ?",(uid,today.isoformat(),(today+timedelta(30)).isoformat()),True)['sum'] or 0
         inc_60=run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=? AND uhrazeno=0 AND datum_splatnosti BETWEEN ? AND ?",(uid,(today+timedelta(31)).isoformat(),(today+timedelta(60)).isoformat()),True)['sum'] or 0
         inc_90=run_query("SELECT SUM(castka_celkem) FROM faktury WHERE user_id=? AND uhrazeno=0 AND datum_splatnosti BETWEEN ? AND ?",(uid,(today+timedelta(61)).isoformat(),(today+timedelta(90)).isoformat()),True)['sum'] or 0
@@ -1141,7 +1078,6 @@ else:
 
         st.divider()
 
-        # ── Horizont 30 / 60 / 90 dní ──
         tab30,tab60,tab90=st.tabs([f"  30 dní  ({inc_30:,.0f} Kč)",f"  31–60 dní  ({inc_60:,.0f} Kč)",f"  61–90 dní  ({inc_90:,.0f} Kč)"])
 
         def render_cf_tab(d_from, d_to):
@@ -1165,8 +1101,6 @@ else:
         with tab90: render_cf_tab(today+timedelta(61), today+timedelta(90))
 
         st.divider()
-
-        # ── Cashflow graf ────────────────────────
         st.subheader("📈 Příjmy za posledních 6 měsíců")
         pp_db=get_pool(); conn_db=pp_db.getconn()
         try:
@@ -1185,7 +1119,6 @@ else:
         else:
             st.info("Žádná data k zobrazení.")
 
-        # ── Plánované výdaje ──────────────────────
         st.divider()
         st.subheader("💸 Přidejte plánovaný výdaj")
         with st.form("cf_vydaj"):
@@ -1196,13 +1129,12 @@ else:
                 run_command("INSERT INTO vydaje (user_id,datum,popis,castka,kategorie) VALUES (?,?,?,?,?)",(uid,cv_d,cv_p,cv_a,cv_k)); st.success("Uloženo"); st.rerun()
 
     # ════════════════════════════════
-    # ⏱️ ČASOVAČ HODIN (NOVÁ FUNKCE)
+    # ČASOVAČ
     # ════════════════════════════════
     elif "Časovač" in menu:
         st.markdown('<div class="sec-hdr"><div class="sec-ico">⏱️</div><div class="sec-title">Časovač hodin</div></div>',unsafe_allow_html=True)
-        st.markdown("Měřte čas na projektech a přímočaře ho převeďte na fakturační položku.",unsafe_allow_html=False)
+        st.markdown("Měřte čas na projektech a přímočaře ho převeďte na fakturační položku.")
 
-        # Timer widget
         st.markdown('<div class="timer-card">',unsafe_allow_html=True)
         if st.session_state.timer_start is None:
             c1,c2=st.columns(2)
@@ -1245,7 +1177,6 @@ else:
             df_tim['fakturovano']=df_tim['fakturovano'].map({0:'Ne',1:'Ano ✓'})
             st.dataframe(df_tim[['start_ts','projekt','cas','castka','fakturovano']].rename(columns={'start_ts':'Začátek','projekt':'Projekt','cas':'Čas','castka':'Kč','fakturovano':'Fakturováno'}),hide_index=True,use_container_width=True)
 
-            # Převod do faktury
             st.markdown("**Převést záznamy do nové faktury:**")
             nefak=df_tim[df_tim['fakturovano']=='Ne']
             if not nefak.empty:
@@ -1275,7 +1206,7 @@ else:
             if c2.button("🗑",key=f"delsbl_{s['id']}"): run_command("DELETE FROM item_sablony WHERE id=? AND user_id=?",(s['id'],uid)); st.rerun()
 
     # ════════════════════════════════
-    # 🔄 OPAKOVANÉ FAKTURY (NOVÁ FUNKCE)
+    # OPAKOVANÉ
     # ════════════════════════════════
     elif "Opakované" in menu:
         st.markdown('<div class="sec-hdr"><div class="sec-ico">🔄</div><div class="sec-title">Opakované faktury</div></div>',unsafe_allow_html=True)
@@ -1319,7 +1250,6 @@ else:
             interval_label={"mesicne":"Měsíčně","ctvrtletne":"Čtvrtletně","pololetne":"Pololetně","rocne":"Ročně"}
             for op in opak:
                 op=dict(op)
-                # Compute if due
                 posledni=op.get('posledni_vytvoreni')
                 days_int=interval_map.get(op.get('interval_typ','mesicne'),30)
                 if posledni:
@@ -1351,7 +1281,6 @@ else:
                     c1,c2,c3=st.columns(3)
                     if due_status in ("overdue","soon"):
                         if c1.button("📄 Vystavit nyní",key=f"op_vystavit_{op['id']}",type="primary"):
-                            # Get category
                             kat_all=run_query("SELECT * FROM kategorie WHERE user_id=?",(uid,))
                             cid=op.get('kategorie_id')
                             if not cid and kat_all: cid=kat_all[0]['id']
