@@ -626,7 +626,7 @@ def generate_pdf(fid, uid, is_pro, template=1):
                 pdf.set_xy(ODB_X,py); pdf.cell(DOD_W,5,ol,0,1,'L'); py+=5
             if data.get('uvodni_text'):
                 pdf.set_y(py+3); pdf.set_x(MX)
-                pdf.set_font(fn,'I',8); pdf.set_text_color(100,115,135)
+                pdf.set_font(fn,'',8); pdf.set_text_color(100,115,135)
                 pdf.multi_cell(MW,4.5,tx(data['uvodni_text'])); py=pdf.get_y()
 
             pdf.set_y(max(py+8,90))
@@ -704,7 +704,7 @@ def generate_pdf(fid, uid, is_pro, template=1):
                 pdf.set_xy(ODB_X,py); pdf.cell(DOD_W,5,ol,0,1,'L'); py+=5
             if data.get('uvodni_text'):
                 pdf.set_y(py+3); pdf.set_x(MX)
-                pdf.set_font(fn,'I',8); pdf.set_text_color(100,115,135)
+                pdf.set_font(fn,'',8); pdf.set_text_color(100,115,135)
                 pdf.multi_cell(MW,4.5,tx(data['uvodni_text'])); py=pdf.get_y()
 
             pdf.set_draw_color(ar,ag,ab); pdf.set_line_width(0.5)
@@ -793,7 +793,7 @@ def generate_pdf(fid, uid, is_pro, template=1):
 
             if data.get('uvodni_text'):
                 pdf.set_y(py+2); pdf.set_x(MX)
-                pdf.set_font(fn,'I',8); pdf.set_text_color(130,140,155)
+                pdf.set_font(fn,'',8); pdf.set_text_color(130,140,155)
                 pdf.multi_cell(MW,4.5,tx(data['uvodni_text'])); py=pdf.get_y()
 
             pdf.set_draw_color(ar,ag,ab); pdf.set_line_width(0.4)
