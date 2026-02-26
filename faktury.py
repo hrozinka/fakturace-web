@@ -37,9 +37,6 @@ FONT_FILE = 'arial.ttf'
 st.set_page_config(page_title="MojeFaktury", page_icon="💎", layout="centered")
 
 # -- CSS (základní – načítá se vždy, i na login stránce) --
-# -- CSS injection: base64 data-URI bypasses ALL markdown/HTML parsers --
-# Streamlit's parser strips @media rules from <style> tags.
-# Encoding CSS as base64 in a <link> data-URI sidesteps this entirely.
 def inject_css(css_str):
     import base64 as _b64
     encoded = _b64.b64encode(css_str.encode("utf-8")).decode("utf-8")
@@ -211,7 +208,6 @@ hr{border-color:rgba(255,255,255,.055)!important;margin:1.4rem 0!important}
 
 /* === MOBILNI RESPONZIVITA (max-width: 640px) ===*/
 @media (max-width: 640px) {
-
   /* Hlavni obsah - zmenšit padding */
   .block-container{padding-left:12px!important;padding-right:12px!important;padding-top:16px!important}
 
@@ -476,7 +472,6 @@ def get_nastaveni(uid):
     return dict(r) if r else {}
 
 def _pdf_qr(pdf, moje, data, cf, block_y, fn, qr_box_w, total_x):
-    """Shared QR code block for all templates."""
     if not moje.get('iban'): return
     try:
         ic  = str(moje['iban']).replace(" ","").upper()
@@ -502,7 +497,6 @@ def _pdf_watermark(pdf, fn, paid):
     pdf.set_text_color(0,0,0)
 
 def _pdf_items(pdf, fn, pol, mx, mw, ar, ag, ab, lr, lg, lb, fp_fn, tx_fn):
-    """Shared items table renderer, returns y after table."""
     COL_DESC = mw - 40; COL_PRICE = 40
     pdf.set_fill_color(ar,ag,ab); pdf.set_text_color(255,255,255)
     pdf.set_font(fn,'B',8.5); pdf.set_x(mx)
@@ -539,7 +533,6 @@ def generate_pdf(fid, uid, is_pro, template=1):
         moje = get_nastaveni(uid)
         paid = bool(data.get('uhrazeno',0))
 
-        # Accent colour from kategorie
         ar,ag,ab = 15,23,42
         if data.get('barva'):
             try:
@@ -566,14 +559,10 @@ def generate_pdf(fid, uid, is_pro, template=1):
         pdf.set_margins(0,0,0); pdf.add_page()
         PAGE_W = 210
 
-        # ============================================================
-        # SABLONA 1: MODERN SIDEBAR (barevny levy pruh)
-        # ============================================================
         if template == 1:
             SB = 32
             pdf.set_fill_color(ar,ag,ab); pdf.rect(0,0,SB,297,'F')
             pdf.set_fill_color(lc(ar,30),lc(ag,30),lc(ab,30)); pdf.rect(SB-1,0,1,297,'F')
-
             logo_placed = False
             if data.get('logo_blob'):
                 try:
@@ -658,16 +647,9 @@ def generate_pdf(fid, uid, is_pro, template=1):
             pdf.set_font(fn,'',6.5); pdf.set_text_color(mr,mg,mb)
             pdf.set_xy(MX,289); pdf.cell(MW,5,"   |   ".join(x for x in fparts if x),0,0,'C')
 
-        # ============================================================
-        # SABLONA 2: KLASIK (klasicka hlavicka, bez postranniho pruhu)
-        # ============================================================
         elif template == 2:
             MX=14; MW=PAGE_W-MX-14
-
-            # Top header bar
             pdf.set_fill_color(ar,ag,ab); pdf.rect(0,0,PAGE_W,22,'F')
-
-            # Logo or company monogram top-left
             logo_placed=False
             if data.get('logo_blob'):
                 try:
@@ -678,21 +660,15 @@ def generate_pdf(fid, uid, is_pro, template=1):
                 pdf.set_font(fn,'B',13); pdf.set_text_color(255,255,255)
                 pdf.set_xy(MX,5); pdf.cell(40,12,tx(moje.get('nazev',''))[:18],0,0,'L')
 
-            # "FAKTURA" right side of header
             pdf.set_font(fn,'B',22); pdf.set_text_color(255,255,255)
             pdf.set_xy(0,4); pdf.cell(PAGE_W-MX,14,"FAKTURA",0,0,'R')
-
-            # Invoice number under header
             pdf.set_font(fn,'',8); pdf.set_text_color(lc(ar,160),lc(ag,160),lc(ab,160))
             pdf.set_xy(PAGE_W-MX-65,15); pdf.cell(65,5,tx(f"Cislo: {cf}"),0,0,'R')
 
-            # Thin accent divider
             pdf.set_draw_color(ar,ag,ab); pdf.set_line_width(0.8)
             pdf.line(MX,26,PAGE_W-MX,26); pdf.set_line_width(0.2)
 
-            # Parties
             DOD_W=80; ODB_X=MX+DOD_W+10; DTL_X=PAGE_W-MX-55
-
             pdf.set_font(fn,'B',7); pdf.set_text_color(ar,ag,ab)
             pdf.set_xy(MX,30); pdf.cell(DOD_W,4,"DODAVATEL",0,0,'L')
             pdf.set_xy(ODB_X,30); pdf.cell(DOD_W,4,"ODBERATEL",0,0,'L')
@@ -702,7 +678,6 @@ def generate_pdf(fid, uid, is_pro, template=1):
             pdf.set_xy(MX,36); pdf.cell(DOD_W,6,tx(moje.get('nazev',''))[:28],0,0,'L')
             pdf.set_xy(ODB_X,36); pdf.cell(DOD_W,6,tx(data.get('k_jmeno',''))[:28],0,0,'L')
 
-            # Invoice details box (right side)
             pdf.set_fill_color(248,249,252); pdf.rect(DTL_X,34,55,32,'F')
             pdf.set_font(fn,'',7.5); pdf.set_text_color(100,115,135)
             details=[("Vystaveno:",fmt_d(data.get('datum_vystaveni'))),
@@ -716,7 +691,6 @@ def generate_pdf(fid, uid, is_pro, template=1):
                 pdf.set_xy(DTL_X+30,y); pdf.cell(22,6,val,0,1,'R')
                 pdf.set_font(fn,'',7.5); pdf.set_text_color(100,115,135)
 
-            # Company details
             pdf.set_font(fn,'',8); pdf.set_text_color(80,95,115); py=44
             dod=[tx(moje.get('adresa','')),tx(f"IC: {moje['ico']}") if moje.get('ico') else "",
                  tx(f"DIC: {moje['dic']}") if moje.get('dic') else "",tx(moje.get('email',''))]
@@ -733,31 +707,26 @@ def generate_pdf(fid, uid, is_pro, template=1):
                 pdf.set_font(fn,'I',8); pdf.set_text_color(100,115,135)
                 pdf.multi_cell(MW,4.5,tx(data['uvodni_text'])); py=pdf.get_y()
 
-            # Separator before table
             pdf.set_draw_color(ar,ag,ab); pdf.set_line_width(0.5)
             pdf.line(MX,max(py+6,75),PAGE_W-MX,max(py+6,75)); pdf.set_line_width(0.2)
             pdf.set_y(max(py+8,77))
 
             ty=_pdf_items(pdf,fn,pol,MX,MW,ar,ag,ab,lr,lg,lb,fp,tx)
-            # Double line after items
             pdf.set_draw_color(ar,ag,ab); pdf.set_line_width(0.5)
             pdf.line(MX,ty,PAGE_W-MX,ty); pdf.line(MX,ty+2,PAGE_W-MX,ty+2)
             pdf.set_line_width(0.2)
 
             BY=ty+8; TBW=80; TX2=PAGE_W-MX-TBW
-            # Total row
             pdf.set_font(fn,'',9); pdf.set_text_color(80,95,115)
             pdf.set_xy(TX2,BY); pdf.cell(TBW//2,8,"CELKEM K UHRADE:",0,0,'L')
             pdf.set_font(fn,'B',18); pdf.set_text_color(ar,ag,ab)
             pdf.set_xy(TX2,BY); pdf.cell(TBW,8,fp(data.get('castka_celkem',0))+" Kc",0,0,'R')
-            # Underline total
             pdf.set_draw_color(ar,ag,ab); pdf.set_line_width(1.5)
             pdf.line(TX2,BY+9,PAGE_W-MX,BY+9); pdf.set_line_width(0.2)
 
             _pdf_qr(pdf,moje,data,cf,BY,fn,44,TX2)
             _pdf_watermark(pdf,fn,paid)
 
-            # Footer
             pdf.set_draw_color(200,210,220); pdf.set_line_width(0.3)
             pdf.line(MX,281,PAGE_W-MX,281)
             fparts=[tx(moje.get('nazev','')),tx(f"IC: {moje['ico']}") if moje.get('ico') else "",
@@ -765,18 +734,11 @@ def generate_pdf(fid, uid, is_pro, template=1):
             pdf.set_font(fn,'',6.5); pdf.set_text_color(150,160,175)
             pdf.set_xy(MX,284); pdf.cell(MW,5,"   |   ".join(x for x in fparts if x),0,0,'C')
 
-        # ============================================================
-        # SABLONA 3: MINIMALNI (cisty design, jen akcent. barvy)
-        # ============================================================
         elif template == 3:
             MX=16; MW=PAGE_W-MX-16
-
-            # Thin top accent stripe
             pdf.set_fill_color(ar,ag,ab); pdf.rect(0,0,PAGE_W,4,'F')
-            # Left accent bar (thin)
             pdf.set_fill_color(ar,ag,ab); pdf.rect(0,4,3,293,'F')
 
-            # Logo or company name
             logo_placed=False
             if data.get('logo_blob'):
                 try:
@@ -784,26 +746,20 @@ def generate_pdf(fid, uid, is_pro, template=1):
                     pdf.image(lf,MX,10,28); os.remove(lf); logo_placed=True
                 except: pass
 
-            # Company name
             pdf.set_font(fn,'B',14); pdf.set_text_color(10,18,35)
             pdf.set_xy(MX,10 if not logo_placed else 42)
             pdf.cell(MW//2,10,tx(moje.get('nazev',''))[:26],0,1,'L')
 
-            # "FAKTURA" — top right, large accent color
             pdf.set_font(fn,'B',32); pdf.set_text_color(ar,ag,ab)
             pdf.set_xy(0,8); pdf.cell(PAGE_W-MX,14,"FAKTURA",0,1,'R')
 
-            # Invoice number under the title
             pdf.set_font(fn,'',8); pdf.set_text_color(150,160,175)
             pdf.set_xy(0,24); pdf.cell(PAGE_W-MX,5,tx(cf),0,1,'R')
 
-            # Horizontal divider
             pdf.set_draw_color(230,232,238); pdf.set_line_width(0.4)
             pdf.line(MX,35,PAGE_W-MX,35); pdf.set_line_width(0.2)
 
-            # Parties — compact horizontal layout
             DOD_W=65; ODB_X=MX+DOD_W+8; DTL_X=ODB_X+65+5
-
             pdf.set_font(fn,'B',6); pdf.set_text_color(ar,ag,ab)
             for lbl,x in [("DODAVATEL",MX),("ODBERATEL",ODB_X),("PLATEBNI UDAJE",DTL_X)]:
                 pdf.set_xy(x,39); pdf.cell(60,3.5,lbl,0,1,'L')
@@ -811,7 +767,6 @@ def generate_pdf(fid, uid, is_pro, template=1):
             pdf.set_font(fn,'B',9); pdf.set_text_color(10,18,35)
             pdf.set_xy(MX,44); pdf.cell(DOD_W,5,tx(moje.get('nazev',''))[:22],0,0,'L')
             pdf.set_xy(ODB_X,44); pdf.cell(DOD_W,5,tx(data.get('k_jmeno',''))[:22],0,0,'L')
-            # Payment details
             pdf.set_font(fn,'',7.5); pdf.set_text_color(80,95,115)
             pay_rows=[("Vystaveno",fmt_d(data.get('datum_vystaveni'))),
                       ("Splatnost",fmt_d(data.get('datum_splatnosti'))),
@@ -841,13 +796,11 @@ def generate_pdf(fid, uid, is_pro, template=1):
                 pdf.set_font(fn,'I',8); pdf.set_text_color(130,140,155)
                 pdf.multi_cell(MW,4.5,tx(data['uvodni_text'])); py=pdf.get_y()
 
-            # Thin divider before table
             pdf.set_draw_color(ar,ag,ab); pdf.set_line_width(0.4)
             tbl_y=max(py+6,85)
             pdf.line(MX,tbl_y,PAGE_W-MX,tbl_y); pdf.set_line_width(0.2)
             pdf.set_y(tbl_y+2)
 
-            # Items — minimal: only horizontal lines, no fill
             COL_DESC=MW-40; COL_PRICE=40
             pdf.set_font(fn,'B',7.5); pdf.set_text_color(ar,ag,ab)
             pdf.set_x(MX); pdf.cell(COL_DESC,7,"POPIS",0,0,'L')
@@ -863,7 +816,6 @@ def generate_pdf(fid, uid, is_pro, template=1):
                 pdf.set_draw_color(238,240,245); pdf.line(MX,pdf.get_y(),PAGE_W-MX,pdf.get_y())
 
             ty=pdf.get_y()+4
-            # Total — just large text, accent colour
             pdf.set_draw_color(ar,ag,ab); pdf.set_line_width(0.5)
             pdf.line(PAGE_W-MX-85,ty,PAGE_W-MX,ty); pdf.set_line_width(0.2)
             pdf.set_font(fn,'',8); pdf.set_text_color(120,130,145)
@@ -874,7 +826,6 @@ def generate_pdf(fid, uid, is_pro, template=1):
             _pdf_qr(pdf,moje,data,cf,ty+2,fn,40,PAGE_W-MX-85)
             _pdf_watermark(pdf,fn,paid)
 
-            # Footer — minimal dotted line
             pdf.set_draw_color(ar,ag,ab); pdf.set_line_width(2)
             pdf.line(MX,284,MX+8,284); pdf.set_line_width(0.2)
             fparts=[tx(moje.get('nazev','')),tx(f"IC: {moje['ico']}") if moje.get('ico') else "",
@@ -980,8 +931,7 @@ if not st.session_state.user_id:
     st.stop()
 
 # ==============================================
-# CSS pro přihlášené uživatele – načítá se AŽ po přihlášení,
-# takže se NIKDY neobjeví jako viditelný text na login stránce.
+# CSS pro přihlášené uživatele
 # ==============================================
 _APP_CSS = r"""/* TIMER */
 .timer-display{font-family:'Syne',sans-serif;font-size:3.5rem;font-weight:800;text-align:center;
@@ -1177,12 +1127,29 @@ else:
                     ed=st.data_editor(st.session_state.items_df,num_rows="dynamic",use_container_width=True,key=f"ed_{rid}")
                     total=float(pd.to_numeric(ed["Cena"],errors='coerce').fillna(0).sum()) if not ed.empty and "Cena" in ed.columns else 0.0
                     st.markdown(f'<div class="total-ln"><span class="total-lbl">Celkem k úhradě</span><span class="total-amt">{total:,.2f} Kč</span></div>',unsafe_allow_html=True)
+                    
                     if st.button("Vystavit fakturu →",type="primary",key=f"vystavit_{rid}"):
                         fid=run_command("INSERT INTO faktury (user_id,cislo_full,klient_id,kategorie_id,datum_vystaveni,datum_splatnosti,castka_celkem,variabilni_symbol,uvodni_text) VALUES (?,?,?,?,?,?,?,?,?)",(uid,full,kid,cid,dv,ds,total,re.sub(r"\D","",full),ut))
                         for _,row in ed.iterrows():
                             if row.get("Popis položky"): run_command("INSERT INTO faktura_polozky (faktura_id,nazev,cena) VALUES (?,?,?)",(fid,row["Popis položky"],float(row.get("Cena",0))))
                         run_command("UPDATE kategorie SET aktualni_cislo=aktualni_cislo+1 WHERE id=?",(cid,))
-                        reset_forms(); cached_pdf.clear(); cached_isdoc.clear(); st.success("Faktura vystavena!"); st.rerun()
+                        reset_forms(); cached_pdf.clear(); cached_isdoc.clear()
+                        st.session_state['last_invoice_id'] = fid
+                        st.session_state['last_invoice_full'] = full
+                        st.rerun()
+                        
+                if st.session_state.get('last_invoice_id'):
+                    last_fid = st.session_state['last_invoice_id']
+                    last_full = st.session_state['last_invoice_full']
+                    _tpl = get_nastaveni(uid).get('faktura_sablona',1) or 1
+                    pdf_out = cached_pdf(last_fid, uid, is_pro, _tpl, f"new_{last_fid}_{_tpl}")
+                    if isinstance(pdf_out, bytes):
+                        st.success(f"Faktura {last_full} byla úspěšně vystavena!")
+                        st.download_button("↓ Stáhnout PDF ihned", pdf_out, f"{last_full}.pdf", "application/pdf")
+                    if st.button("✖ Skrýt zprávu"):
+                        del st.session_state['last_invoice_id']
+                        del st.session_state['last_invoice_full']
+                        st.rerun()
 
         st.markdown("<br>",unsafe_allow_html=True)
         fc1,fc2=st.columns(2)
