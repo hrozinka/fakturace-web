@@ -1174,6 +1174,7 @@ else:
             sq=search_q.lower()
             df_f=df_f[df_f['jmeno'].str.lower().str.contains(sq,na=False)|df_f['cislo_full'].str.lower().str.contains(sq,na=False)|df_f['muj_popis'].fillna('').str.lower().str.contains(sq,na=False)]
         if df_f.empty: st.info("Žádné faktury.")
+        
         for row in df_f.to_dict('records'):
             cf=row.get('cislo_full') or f"F{row['id']}"; paid=row['uhrazeno']
             is_ov=False
@@ -1188,9 +1189,17 @@ else:
                     if c1.button("↩ Zrušit",key=f"u0_{row['id']}"): run_command("UPDATE faktury SET uhrazeno=0 WHERE id=?",(row['id'],)); cached_pdf.clear(); cached_isdoc.clear(); st.rerun()
                 else:
                     if c1.button("✓ Zaplaceno",key=f"u1_{row['id']}"): run_command("UPDATE faktury SET uhrazeno=1 WHERE id=?",(row['id'],)); cached_pdf.clear(); cached_isdoc.clear(); st.rerun()
+                
+                # ------ Úprava tlačítka PDF ------
                 _tpl=get_nastaveni(uid).get('faktura_sablona',1) or 1
                 rh=str(row)+str(_tpl); pdf_out=cached_pdf(row['id'],uid,is_pro,_tpl,rh)
-                if isinstance(pdf_out,bytes): c2.download_button("↓ PDF",pdf_out,f"{cf}.pdf","application/pdf",key=f"pdf_{row['id']}")
+                
+                if isinstance(pdf_out,bytes): 
+                    c2.download_button("↓ Stáhnout PDF", pdf_out, f"{cf}.pdf", "application/pdf", key=f"pdf_{row['id']}", type="primary")
+                else:
+                    c2.error("⚠️ Nelze vygenerovat PDF")
+                # ---------------------------------
+                
                 if is_pro:
                     isdoc_b=cached_isdoc(row['id'],uid,rh)
                     if isdoc_b: c2.download_button("↓ ISDOC",isdoc_b,f"{cf}.isdoc","application/xml",key=f"isd_{row['id']}")
