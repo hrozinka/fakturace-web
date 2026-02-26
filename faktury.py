@@ -418,14 +418,13 @@ def get_nastaveni(uid):
     return dict(r) if r else {}
 
 # ==============================================
-# PDF GENERÁTOR — čistý, decentní, tiskuschopný
+# PDF GENERÁTOR
+# Kde se mění vzhled faktury: POUZE v této funkci.
+# Barvy sekcí: C_* konstanty (řádky ~440-450)
+# Barva akcentu: ar,ag,ab (z kategorie, řádek ~477)
+# Rozložení bloků: číslované sekce 1-9 níže
 # ==============================================
 def generate_pdf(fid, uid, is_pro, template=1):
-    """
-    Profesionální faktura — čitelná barevně i černobíle.
-    Princip: barva kategorie se používá POUZE pro tenké dekorativní linky,
-    nikoli pro velké bloky pozadí. Všechny texty jsou tmavé na světlém pozadí.
-    """
     use_font = os.path.exists(FONT_FILE)
 
     def tx(t):
@@ -437,23 +436,31 @@ def generate_pdf(fid, uid, is_pro, template=1):
         except:
             return "0,00"
 
-    # Konstanty layoutu
-    ML = 18          # levý okraj
-    MR = 18          # pravý okraj
-    MT = 18          # horní okraj
-    PAGE_W = 210
-    PAGE_H = 297
-    MW = PAGE_W - ML - MR   # 174 mm
+    # ── LAYOUT KONSTANTY ─────────────────────────────────────────────────
+    ML      = 18          # levý okraj mm
+    MR      = 18          # pravý okraj mm
+    MT      = 16          # horní okraj mm
+    PAGE_W  = 210
+    PAGE_H  = 297
+    MW      = PAGE_W - ML - MR       # 174 mm šířka obsahu
+    FOOT_H  = 16                     # rezerva pro patičku
+    MAX_Y   = PAGE_H - FOOT_H        # maximální y před patičkou
 
-    # Neutrální odstíny pro černobílý tisk
-    C_BLACK   = (20, 20, 20)
-    C_DARK    = (45, 45, 45)
-    C_MID     = (100, 100, 100)
-    C_LIGHT   = (160, 160, 160)
-    C_RULE    = (210, 210, 210)     # světlé dělicí čáry
-    C_BG_HEAD = (245, 245, 245)    # pozadí záhlaví tabulky (světle šedé)
-    C_BG_ALT  = (251, 251, 251)    # alternativní řádky (minimální)
-    C_WHITE   = (255, 255, 255)
+    # ── BARVY ────────────────────────────────────────────────────────────
+    # Změnou těchto konstant měníš celý vizuál faktury.
+    # Všechny jsou záměrně neutrální → faktura vypadá stejně B&W i barevně.
+    C_BLACK    = (15,  15,  15)   # nadpisy, čísla
+    C_DARK     = (40,  40,  40)   # texty položek
+    C_MID      = (95,  95,  95)   # popisky, sekundární info
+    C_LIGHT    = (155, 155, 155)  # labely, patička
+    C_RULE     = (215, 215, 215)  # dělicí čáry
+    C_BG_HEAD  = (242, 242, 242)  # pozadí záhlaví tabulky
+    C_BG_ALT   = (250, 250, 250)  # alternativní řádek
+
+    # Výška jednoho řádku v různých sekcích
+    LINE_H   = 5.0   # standardní řádek textu
+    ROW_H    = 7.0   # řádek tabulky položek
+    HDR_H    = 8.0   # záhlaví tabulky
 
     try:
         raw = run_query(
@@ -469,8 +476,9 @@ def generate_pdf(fid, uid, is_pro, template=1):
         moje = get_nastaveni(uid)
         paid = bool(data.get('uhrazeno', 0))
 
-        # Akcentní barva z kategorie (decentní — použijeme jen pro 2px linky)
-        ar, ag, ab = 80, 100, 130   # výchozí: chladná modrošedá
+        # Akcentní barva z kategorie — používá se JEN pro tenké linky (1-1.5px).
+        # Díky tomu je faktura čitelná i při černobílém tisku.
+        ar, ag, ab = 70, 90, 120
         if data.get('barva'):
             try:
                 cv = data['barva'].lstrip('#')
@@ -500,300 +508,295 @@ def generate_pdf(fid, uid, is_pro, template=1):
         pdf.add_page()
 
         # ── Pomocné funkce ─────────────────────────────────────────────────
-        def set_color(rgb, fill=False):
-            if fill:
-                pdf.set_fill_color(*rgb)
-            else:
-                pdf.set_text_color(*rgb)
+        def sc(rgb):
+            pdf.set_text_color(*rgb)
 
-        def rule(y, lw=0.3, color=C_RULE):
+        def hrule(y, lw=0.25, color=C_RULE):
+            """Neutrální dělicí čára."""
             pdf.set_draw_color(*color)
             pdf.set_line_width(lw)
             pdf.line(ML, y, PAGE_W - MR, y)
+            pdf.set_line_width(0.2)
 
-        def accent_rule(y, lw=1.0):
-            """Tenká barevná linka — jediné místo kde se barva kategorie projevuje."""
+        def accent_line(y, lw=1.1):
+            """Barevná dekorativní linka — pouze zde se projevuje barva kategorie."""
             pdf.set_draw_color(ar, ag, ab)
             pdf.set_line_width(lw)
             pdf.line(ML, y, PAGE_W - MR, y)
             pdf.set_line_width(0.2)
 
-        def kv_row(label, value, x, y, lw=85, vw=None):
-            """Klíč–hodnota v řádce."""
-            vw = vw or (MW - lw)
-            pdf.set_font(fn, '', 8)
-            set_color(C_LIGHT)
-            pdf.set_xy(x, y)
-            pdf.cell(lw, 4.5, tx(label), 0, 0, 'L')
-            pdf.set_font(fn, 'B', 8)
-            set_color(C_DARK)
-            pdf.set_xy(x + lw, y)
-            pdf.cell(vw, 4.5, tx(value), 0, 0, 'L')
+        def cell_kv(label, value, x, y, col_w=30):
+            """Dvojice label (šedý) + value (tučný) na jednom řádku."""
+            pdf.set_font(fn, '', 8); sc(C_LIGHT)
+            pdf.set_xy(x, y); pdf.cell(col_w, LINE_H, tx(label), 0, 0, 'L')
+            pdf.set_font(fn, 'B', 8); sc(C_DARK)
+            pdf.set_xy(x + col_w, y); pdf.cell(MW / 2 - col_w - 2, LINE_H, tx(value), 0, 0, 'L')
+
+        # ── Výpočet výšky bloku adres (dynamicky) ─────────────────────────
+        dod_lines = []
+        if moje.get('adresa'):  dod_lines.append(tx(moje['adresa']))
+        if moje.get('ico'):     dod_lines.append(tx(f"IC: {moje['ico']}"))
+        if moje.get('dic'):     dod_lines.append(tx(f"DIC: {moje['dic']}"))
+        if moje.get('email'):   dod_lines.append(tx(moje['email']))
+        if moje.get('telefon'): dod_lines.append(tx(moje['telefon']))
+
+        odb_lines = []
+        if data.get('k_adresa'): odb_lines.append(tx(data['k_adresa']))
+        if data.get('k_ico'):    odb_lines.append(tx(f"IC: {data['k_ico']}"))
+        if data.get('k_dic'):    odb_lines.append(tx(f"DIC: {data['k_dic']}"))
+
+        addr_rows  = max(len(dod_lines), len(odb_lines), 1)
+        addr_block = 4 + 7 + addr_rows * LINE_H   # label(4) + jméno(7) + řádky
 
         # ══════════════════════════════════════════════════════════════════
-        # 1. ZÁHLAVÍ  (logo vlevo, název faktury vpravo)
+        # 1. ZÁHLAVÍ  —  logo vlevo / FAKTURA + číslo vpravo
         # ══════════════════════════════════════════════════════════════════
+        y = MT   # <-- hlavní kurzor, od teď vždy sledujeme tuto proměnnou
+
         logo_h = 0
         if data.get('logo_blob'):
             try:
                 lf = f"/tmp/logo_{fid}.png"
-                open(lf, "wb").write(data['logo_blob'])
-                pdf.image(lf, ML, MT, h=18)
+                with open(lf, "wb") as f2: f2.write(data['logo_blob'])
+                pdf.image(lf, ML, y, h=18)
                 logo_h = 18
                 try: os.remove(lf)
                 except: pass
             except:
                 pass
 
-        # Název firmy (pokud není logo)
         if logo_h == 0:
-            pdf.set_font(fn, 'B', 13)
-            set_color(C_BLACK)
-            pdf.set_xy(ML, MT + 2)
-            pdf.cell(90, 8, tx(moje.get('nazev', ''))[:38], 0, 0, 'L')
+            pdf.set_font(fn, 'B', 13); sc(C_BLACK)
+            pdf.set_xy(ML, y + 3)
+            pdf.cell(MW / 2, 8, tx(moje.get('nazev', ''))[:38], 0, 0, 'L')
 
-        # FAKTURA — číslo (vpravo)
-        pdf.set_font(fn, 'B', 22)
-        set_color(C_BLACK)
-        pdf.set_xy(PAGE_W - MR - 90, MT)
-        pdf.cell(90, 10, "FAKTURA", 0, 0, 'R')
+        # "FAKTURA" + číslo vpravo
+        pdf.set_font(fn, 'B', 24); sc(C_BLACK)
+        pdf.set_xy(ML + MW / 2, y)
+        pdf.cell(MW / 2, 11, "FAKTURA", 0, 0, 'R')
 
-        pdf.set_font(fn, '', 9)
-        set_color(C_MID)
-        pdf.set_xy(PAGE_W - MR - 90, MT + 11)
-        pdf.cell(90, 5, tx(f"c. {cf}"), 0, 0, 'R')
+        pdf.set_font(fn, '', 9); sc(C_MID)
+        pdf.set_xy(ML + MW / 2, y + 12)
+        pdf.cell(MW / 2, 5, tx(f"c. {cf}"), 0, 0, 'R')
 
-        # Silná akcentní linka pod záhlavím
-        hdr_bottom = MT + max(logo_h, 18) + 4
-        accent_rule(hdr_bottom, lw=1.2)
+        # y po záhlaví
+        y = MT + max(logo_h, 18) + 5
+        accent_line(y, lw=1.3)
+        y += 6
 
         # ══════════════════════════════════════════════════════════════════
-        # 2. DODAVATEL  |  ODBĚRATEL  (dvě sekce vedle sebe)
+        # 2. DODAVATEL  |  ODBĚRATEL
         # ══════════════════════════════════════════════════════════════════
-        col_w = (MW - 6) / 2   # mezera 6 mm mezi sloupci
-        y_addr = hdr_bottom + 6
+        col_w    = (MW - 8) / 2   # šířka každého sloupce (mezera 8 mm)
+        col2_x   = ML + col_w + 8
 
-        # Záhlaví sekcí
-        for label, x in [("DODAVATEL", ML), ("ODBERATEL", ML + col_w + 6)]:
-            pdf.set_font(fn, 'B', 6.5)
-            set_color(C_LIGHT)
-            pdf.set_xy(x, y_addr)
-            pdf.cell(col_w, 4, tx(label), 0, 1, 'L')
+        # Záhlaví sloupců
+        for label, x in [("DODAVATEL", ML), ("ODBERATEL", col2_x)]:
+            pdf.set_font(fn, 'B', 6.5); sc(C_LIGHT)
+            pdf.set_xy(x, y); pdf.cell(col_w, 4, tx(label), 0, 0, 'L')
 
-        # Dodavatel — jméno
-        y_d = y_addr + 4
-        pdf.set_font(fn, 'B', 10)
-        set_color(C_BLACK)
-        pdf.set_xy(ML, y_d)
-        pdf.cell(col_w, 6, tx(moje.get('nazev', ''))[:40], 0, 0, 'L')
+        y += 4
 
-        # Odběratel — jméno
-        pdf.set_xy(ML + col_w + 6, y_d)
-        pdf.cell(col_w, 6, tx(data.get('k_jmeno', ''))[:40], 0, 0, 'L')
+        # Jméno (tučné, větší)
+        pdf.set_font(fn, 'B', 10); sc(C_BLACK)
+        pdf.set_xy(ML, y);     pdf.cell(col_w, 7, tx(moje.get('nazev', ''))[:42], 0, 0, 'L')
+        pdf.set_xy(col2_x, y); pdf.cell(col_w, 7, tx(data.get('k_jmeno', ''))[:42], 0, 0, 'L')
 
-        # Dodavatel — detaily
-        dod_lines = []
-        if moje.get('adresa'): dod_lines.append(tx(moje['adresa']))
-        if moje.get('ico'):    dod_lines.append(tx(f"IC: {moje['ico']}"))
-        if moje.get('dic'):    dod_lines.append(tx(f"DIC: {moje['dic']}"))
-        if moje.get('email'):  dod_lines.append(tx(moje['email']))
-        if moje.get('telefon'): dod_lines.append(tx(moje['telefon']))
+        y += 7
 
-        # Odběratel — detaily
-        odb_lines = []
-        if data.get('k_adresa'): odb_lines.append(tx(data['k_adresa']))
-        if data.get('k_ico'):    odb_lines.append(tx(f"IC: {data['k_ico']}"))
-        if data.get('k_dic'):    odb_lines.append(tx(f"DIC: {data['k_dic']}"))
+        # Detailní řádky
+        pdf.set_font(fn, '', 8.5); sc(C_DARK)
+        for i in range(addr_rows):
+            dl = dod_lines[i] if i < len(dod_lines) else ""
+            ol = odb_lines[i] if i < len(odb_lines) else ""
+            if dl:
+                pdf.set_xy(ML, y); pdf.cell(col_w, LINE_H, dl, 0, 0, 'L')
+            if ol:
+                pdf.set_xy(col2_x, y); pdf.cell(col_w, LINE_H, ol, 0, 0, 'L')
+            y += LINE_H
 
-        pdf.set_font(fn, '', 8.5)
-        set_color(C_DARK)
-        y_det = y_d + 6
-        for i in range(max(len(dod_lines), len(odb_lines))):
-            row_y = y_det + i * 5
-            if i < len(dod_lines):
-                pdf.set_xy(ML, row_y)
-                pdf.cell(col_w, 5, dod_lines[i], 0, 0, 'L')
-            if i < len(odb_lines):
-                pdf.set_xy(ML + col_w + 6, row_y)
-                pdf.cell(col_w, 5, odb_lines[i], 0, 0, 'L')
-
-        y_after_addr = y_det + max(len(dod_lines), len(odb_lines), 1) * 5 + 4
+        y += 5   # mezera pod adresami
 
         # ══════════════════════════════════════════════════════════════════
-        # 3. PLATEBNÍ INFORMACE  (subtilní šedý blok)
+        # 3. PLATEBNÍ INFORMACE  (2 sloupce × 3 řádky)
         # ══════════════════════════════════════════════════════════════════
-        rule(y_after_addr, lw=0.3)
-        y_pi = y_after_addr + 5
+        hrule(y); y += 4
 
-        # Dvě skupiny po třech kv_row
-        col1_x = ML
-        col2_x = ML + MW / 2
+        half = MW / 2
+        x1 = ML
+        x2 = ML + half
 
-        kv_row("Datum vystaveni:", fmt_d(data.get('datum_vystaveni', '')), col1_x, y_pi, lw=34)
-        kv_row("Datum splatnosti:", fmt_d(data.get('datum_splatnosti', '')), col1_x, y_pi + 5.5, lw=34)
-        if data.get('datum_duzp'):
-            kv_row("Datum DUZP:", fmt_d(data.get('datum_duzp', '')), col1_x, y_pi + 11, lw=34)
+        # Levý sloupec: datum vystavení / splatnost / DUZP
+        cell_kv("Vystaveno:",  fmt_d(data.get('datum_vystaveni', '')),  x1, y, col_w=28)
+        cell_kv("Splatnost:",  fmt_d(data.get('datum_splatnosti', '')), x2, y, col_w=28)
+        y += LINE_H + 1
 
-        kv_row("Zpusob uhrady:", tx(data.get('zpusob_uhrady', 'Prevodem')), col2_x, y_pi, lw=34)
-        ucet_str = f"{moje.get('ucet', '')} / {moje.get('banka', '')}" if moje.get('ucet') else "-"
-        kv_row("Ucet / Banka:", tx(ucet_str), col2_x, y_pi + 5.5, lw=34)
-        if data.get('variabilni_symbol'):
-            kv_row("Var. symbol:", tx(data.get('variabilni_symbol', '')), col2_x, y_pi + 11, lw=34)
+        ucet_str = f"{moje.get('ucet','')} / {moje.get('banka','')}" if moje.get('ucet') else "-"
+        cell_kv("Zpusob uhrady:", tx(data.get('zpusob_uhrady', 'Prevodem')), x1, y, col_w=28)
+        cell_kv("Ucet / Banka:",  tx(ucet_str),                              x2, y, col_w=28)
+        y += LINE_H + 1
 
-        y_after_pi = y_pi + 18
-        rule(y_after_pi, lw=0.3)
+        if data.get('variabilni_symbol') or data.get('datum_duzp'):
+            if data.get('datum_duzp'):
+                cell_kv("Datum DUZP:", fmt_d(data.get('datum_duzp', '')), x1, y, col_w=28)
+            if data.get('variabilni_symbol'):
+                cell_kv("Var. symbol:", tx(data.get('variabilni_symbol', '')), x2, y, col_w=28)
+            y += LINE_H + 1
+
+        y += 4
+        hrule(y); y += 5
 
         # ══════════════════════════════════════════════════════════════════
-        # 4. ÚVODNÍ TEXT
+        # 4. ÚVODNÍ TEXT  (volitelný)
         # ══════════════════════════════════════════════════════════════════
-        y_cur = y_after_pi + 5
-        if data.get('uvodni_text'):
-            pdf.set_font(fn, '', 9)
-            set_color(C_MID)
-            pdf.set_xy(ML, y_cur)
-            pdf.multi_cell(MW, 5, tx(data['uvodni_text']))
-            y_cur = pdf.get_y() + 3
+        if data.get('uvodni_text') and str(data['uvodni_text']).strip():
+            pdf.set_font(fn, '', 9); sc(C_MID)
+            pdf.set_xy(ML, y)
+            pdf.multi_cell(MW, LINE_H, tx(data['uvodni_text']))
+            y = pdf.get_y() + 4
 
         # ══════════════════════════════════════════════════════════════════
         # 5. TABULKA POLOŽEK
         # ══════════════════════════════════════════════════════════════════
-        COL_DESC = MW - 38
-        COL_AMT  = 38
+        COL_D = MW - 40   # šířka sloupce Popis
+        COL_A = 40        # šířka sloupce Částka
 
-        # Záhlaví tabulky — světle šedé pozadí (perfektní v B&W tisku)
+        # Záhlaví tabulky
         pdf.set_fill_color(*C_BG_HEAD)
         pdf.set_draw_color(*C_RULE)
-        pdf.set_line_width(0.25)
-        pdf.set_xy(ML, y_cur)
-        pdf.rect(ML, y_cur, MW, 7, 'FD')
+        pdf.set_line_width(0.2)
+        pdf.rect(ML, y, MW, HDR_H, 'FD')
 
-        pdf.set_font(fn, 'B', 8)
-        set_color(C_DARK)
-        pdf.set_xy(ML + 3, y_cur + 1.5)
-        pdf.cell(COL_DESC - 3, 4, "Popis polozky", 0, 0, 'L')
-        pdf.set_xy(ML + COL_DESC, y_cur + 1.5)
-        pdf.cell(COL_AMT - 3, 4, "Castka (Kc)", 0, 0, 'R')
+        pdf.set_font(fn, 'B', 8.5); sc(C_DARK)
+        pdf.set_xy(ML + 3,      y + 2); pdf.cell(COL_D - 3, 4, "Popis polozky", 0, 0, 'L')
+        pdf.set_xy(ML + COL_D,  y + 2); pdf.cell(COL_A - 3, 4, "Castka (Kc)",  0, 0, 'R')
 
-        # Tenká akcentní linka pod záhlavím tabulky
-        accent_rule(y_cur + 7, lw=0.8)
+        accent_line(y + HDR_H, lw=0.9)
+        y += HDR_H
 
-        y_row = y_cur + 7
+        # Řádky položek
         for idx, item in enumerate(pol):
-            if not item.get('nazev'):
+            nazev = str(item.get('nazev', '')).strip()
+            if not nazev:
                 continue
-            row_h = 7
-            # Jemné alternující pozadí (viditelné i v B&W jako neutrální šedá)
+
+            # Odhadni počet řádků textu (přibližně 60 znaků na řádek při šíři COL_D)
+            estimated_lines = max(1, (len(nazev) + 59) // 60)
+            this_row_h = max(ROW_H, estimated_lines * LINE_H + 3)
+
+            # Kontrola konce stránky
+            if y + this_row_h > MAX_Y - 20:
+                pdf.add_page()
+                y = MT
+                # Opakuj záhlaví na nové stránce
+                pdf.set_fill_color(*C_BG_HEAD)
+                pdf.rect(ML, y, MW, HDR_H, 'FD')
+                pdf.set_font(fn, 'B', 8.5); sc(C_DARK)
+                pdf.set_xy(ML + 3,     y + 2); pdf.cell(COL_D - 3, 4, "Popis polozky (pokrac.)", 0, 0, 'L')
+                pdf.set_xy(ML + COL_D, y + 2); pdf.cell(COL_A - 3, 4, "Castka (Kc)", 0, 0, 'R')
+                accent_line(y + HDR_H, lw=0.9)
+                y += HDR_H
+
+            # Alternující pozadí
             if idx % 2 == 1:
                 pdf.set_fill_color(*C_BG_ALT)
-                pdf.rect(ML, y_row, MW, row_h, 'F')
+                pdf.rect(ML, y, MW, this_row_h, 'F')
 
-            pdf.set_font(fn, '', 9)
-            set_color(C_DARK)
-            pdf.set_xy(ML + 3, y_row + 1.5)
-            pdf.cell(COL_DESC - 3, 4, tx(item.get('nazev', '')), 0, 0, 'L')
+            # Text popisu (multi_cell pro dlouhé texty)
+            pdf.set_font(fn, '', 9); sc(C_DARK)
+            pdf.set_xy(ML + 3, y + 2)
+            pdf.multi_cell(COL_D - 6, LINE_H, tx(nazev), 0, 'L')
 
-            pdf.set_font(fn, '', 9)
-            set_color(C_DARK)
-            pdf.set_xy(ML + COL_DESC, y_row + 1.5)
-            pdf.cell(COL_AMT - 3, 4, fp(item.get('cena', 0)), 0, 0, 'R')
+            # Cena — zarovnaná ke středu výšky řádku
+            pdf.set_font(fn, 'B', 9); sc(C_DARK)
+            pdf.set_xy(ML + COL_D, y + (this_row_h - LINE_H) / 2)
+            pdf.cell(COL_A - 3, LINE_H, fp(item.get('cena', 0)), 0, 0, 'R')
 
-            # Dělicí linka řádku (pouze mírná)
-            pdf.set_draw_color(*C_RULE)
-            pdf.set_line_width(0.15)
-            pdf.line(ML, y_row + row_h, PAGE_W - MR, y_row + row_h)
-            y_row += row_h
+            # Jemná dělicí čára
+            hrule(y + this_row_h, lw=0.15)
+            y += this_row_h
 
         # ══════════════════════════════════════════════════════════════════
-        # 6. CELKOVÁ ČÁSTKA
+        # 6. CELKOVÁ ČÁSTKA  +  QR kód
         # ══════════════════════════════════════════════════════════════════
-        y_tot = y_row + 5
+        y += 6
 
-        # Pravý sloupec — total box (jen orámování, žádné barevné pozadí)
-        tot_box_w = 80
-        tot_box_x = PAGE_W - MR - tot_box_w
-        tot_box_h = 13
+        # Box CELKEM — vpravo, pevná šířka
+        BOX_W = 82
+        BOX_H = 16
+        BOX_X = PAGE_W - MR - BOX_W
+
+        # Barevná linka nahoře boxu (jediný barevný prvek)
+        accent_line(y, lw=1.5)
 
         pdf.set_draw_color(*C_RULE)
         pdf.set_line_width(0.3)
-        pdf.rect(tot_box_x, y_tot, tot_box_w, tot_box_h)
+        pdf.rect(BOX_X, y, BOX_W, BOX_H)
 
-        # Silná akcentní linka nahoře total boxu
-        accent_rule(y_tot, lw=1.5)
+        pdf.set_font(fn, '', 7.5); sc(C_MID)
+        pdf.set_xy(BOX_X + 3, y + 3)
+        pdf.cell(BOX_W - 6, 4, "CELKEM K UHRADE:", 0, 0, 'L')
 
-        pdf.set_font(fn, '', 8)
-        set_color(C_MID)
-        pdf.set_xy(tot_box_x + 3, y_tot + 2.5)
-        pdf.cell(30, 4, "CELKEM K UHRADE:", 0, 0, 'L')
+        pdf.set_font(fn, 'B', 14); sc(C_BLACK)
+        pdf.set_xy(BOX_X + 3, y + 8)
+        pdf.cell(BOX_W - 6, 6, fp(data.get('castka_celkem', 0)) + " Kc", 0, 0, 'R')
 
-        pdf.set_font(fn, 'B', 15)
-        set_color(C_BLACK)
-        pdf.set_xy(tot_box_x + 3, y_tot + 6.5)
-        pdf.cell(tot_box_w - 6, 5, fp(data.get('castka_celkem', 0)) + " Kc", 0, 0, 'R')
-
-        # ══════════════════════════════════════════════════════════════════
-        # 7. QR KÓD (levá část, zarovnaný s total)
-        # ══════════════════════════════════════════════════════════════════
+        # QR kód — vlevo vedle boxu CELKEM
         if moje.get('iban'):
             try:
                 ic  = str(moje['iban']).replace(" ", "").upper()
                 vs  = str(data.get('variabilni_symbol', ''))
                 amt = data.get('castka_celkem', 0)
-                qr_str = f"SPD*1.0*ACC:{ic}*AM:{amt}*CC:CZK*X-VS:{vs}*MSG:{rm_acc('Faktura ' + cf)}"
-                qr_img = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_M,
-                                       box_size=4, border=0)
-                qr_img.add_data(qr_str)
-                qr_img.make(fit=True)
-                q = qr_img.make_image(fill_color="black", back_color="white")
-                qf = f"/tmp/qr_{fid}.png"
-                q.save(qf)
-                pdf.image(qf, ML, y_tot - 2, 20)
+                qr_s = f"SPD*1.0*ACC:{ic}*AM:{amt}*CC:CZK*X-VS:{vs}*MSG:{rm_acc('Faktura ' + cf)}"
+                qri = qrcode.QRCode(version=1,
+                                    error_correction=qrcode.constants.ERROR_CORRECT_M,
+                                    box_size=4, border=0)
+                qri.add_data(qr_s); qri.make(fit=True)
+                qi = qri.make_image(fill_color="black", back_color="white")
+                qf = f"/tmp/qr_{fid}.png"; qi.save(qf)
+                pdf.image(qf, ML, y, 22)
                 try: os.remove(qf)
                 except: pass
-                pdf.set_font(fn, '', 7)
-                set_color(C_LIGHT)
-                pdf.set_xy(ML + 22, y_tot + 1)
+                pdf.set_font(fn, '', 6.5); sc(C_LIGHT)
+                pdf.set_xy(ML + 24, y + 2)
                 pdf.cell(40, 4, "QR Platba", 0, 1, 'L')
-                pdf.set_xy(ML + 22, y_tot + 5)
-                pdf.cell(50, 4, "Naskenujte v bance", 0, 1, 'L')
+                pdf.set_xy(ML + 24, y + 6)
+                pdf.cell(50, 4, "Naskenujte v mobilni bance", 0, 1, 'L')
             except:
                 pass
 
+        y += BOX_H + 4
+
         # ══════════════════════════════════════════════════════════════════
-        # 8. VODOZNAK "ZAPLACENO"
+        # 7. VODOZNAK "ZAPLACENO"  (velmi světlý, neblokuje tisk)
         # ══════════════════════════════════════════════════════════════════
         if paid:
-            # Jemný diagonální vodoznak — velmi světlý, neruší obsah
-            pdf.set_font(fn, 'B', 50)
-            pdf.set_text_color(220, 220, 220)
-            pdf.set_xy(30, 130)
-            pdf.rotate(32)
+            pdf.set_font(fn, 'B', 52)
+            pdf.set_text_color(225, 225, 225)
+            pdf.set_xy(25, 125)
+            pdf.rotate(30)
             pdf.cell(0, 0, "ZAPLACENO", 0, 0, 'C')
             pdf.rotate(0)
-            set_color(C_BLACK)
 
         # ══════════════════════════════════════════════════════════════════
-        # 9. PATIČKA
+        # 8. PATIČKA  (fixně dole na stránce, nezávisle na obsahu)
         # ══════════════════════════════════════════════════════════════════
-        foot_y = PAGE_H - 14
-        # Tenká linka — akcentní barva
-        accent_rule(foot_y - 3, lw=0.8)
+        foot_y = PAGE_H - 13
+        accent_line(foot_y - 3, lw=0.8)
 
         foot_parts = []
-        if moje.get('nazev'):   foot_parts.append(tx(moje['nazev']))
-        if moje.get('ico'):     foot_parts.append(tx(f"IC: {moje['ico']}"))
-        if moje.get('email'):   foot_parts.append(tx(moje['email']))
-        if moje.get('telefon'): foot_parts.append(tx(moje['telefon']))
+        if moje.get('nazev'):    foot_parts.append(tx(moje['nazev']))
+        if moje.get('ico'):      foot_parts.append(tx(f"IC: {moje['ico']}"))
+        if moje.get('email'):    foot_parts.append(tx(moje['email']))
+        if moje.get('telefon'):  foot_parts.append(tx(moje['telefon']))
 
-        pdf.set_font(fn, '', 7)
-        set_color(C_LIGHT)
+        pdf.set_font(fn, '', 7); sc(C_LIGHT)
         pdf.set_xy(ML, foot_y)
-        pdf.cell(MW, 5, "   |   ".join(foot_parts), 0, 0, 'C')
+        pdf.cell(MW - 20, 5, "   |   ".join(foot_parts), 0, 0, 'C')
 
-        # Číslo stránky (vpravo)
-        pdf.set_xy(PAGE_W - MR - 30, foot_y)
-        set_color(C_LIGHT)
-        pdf.set_font(fn, '', 7)
-        pdf.cell(30, 5, f"Strana {pdf.page_no()}", 0, 0, 'R')
+        pdf.set_font(fn, '', 7); sc(C_LIGHT)
+        pdf.set_xy(PAGE_W - MR - 20, foot_y)
+        pdf.cell(20, 5, f"str. {pdf.page_no()}", 0, 0, 'R')
 
         # ── Výstup ──────────────────────────────────────────────────────
         try:
@@ -801,9 +804,7 @@ def generate_pdf(fid, uid, is_pro, template=1):
         except TypeError:
             out = pdf.output()
 
-        if isinstance(out, str):
-            return out.encode('latin-1')
-        return bytes(out)
+        return out.encode('latin-1') if isinstance(out, str) else bytes(out)
 
     except Exception as e:
         print(f"PDF error: {e}")
