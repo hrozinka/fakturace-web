@@ -428,11 +428,15 @@ def _draw_footer(pdf,fn,moje,tx,sc,accent_line,hrule,PAGE_H,ML,MW,C_LIGHT,C_RULE
     pdf.set_xy(ML,foot_y); pdf.cell(MW-20,5,"   |   ".join(foot_parts),0,0,'C')
     pdf.set_xy(210-18-20,foot_y); pdf.cell(20,5,f"str. {pdf.page_no()}",0,0,'R')
 
+
 # ==============================================
-# PDF GENERÁTOR — šablona iDoklad
-# Levý barevný pruh se štítky sekcí, logo, platební panel s QR
+# PDF GENERÁTOR — 2 varianty stylu iDoklad
 # ==============================================
-def generate_pdf(fid, uid, is_pro):
+def generate_pdf(fid, uid, is_pro, template=1):
+    """
+    template=1 … iDoklad Modern  (levý barevný pruh + rotované štítky sekcí)
+    template=2 … iDoklad Classic (bez pruhu, horizontální layout)
+    """
     use_font = os.path.exists(FONT_FILE)
 
     def tx(t): return rm_acc(str(t)) if t else ""
@@ -440,15 +444,15 @@ def generate_pdf(fid, uid, is_pro):
         try: return f"{float(v):,.2f}".replace(",", " ").replace(".", ",")
         except: return "0,00"
 
-    ML=18; MR=18; MT=16
+    ML=18; MR=18; MT=15
     PAGE_W=210; PAGE_H=297
     MW=PAGE_W-ML-MR
     LINE_H=5.0; ROW_H=7.5; HDR_H=8.5
-    MAX_Y=PAGE_H-20
+    MAX_Y=PAGE_H-22
 
-    C_BLACK=(15,15,15); C_DARK=(40,40,40); C_MID=(95,95,95)
-    C_LIGHT=(155,155,155); C_RULE=(210,210,210)
-    C_BG_HEAD=(238,238,238); C_BG_ALT=(250,250,250)
+    C_BLACK=(15,15,15); C_DARK=(40,40,40); C_MID=(100,100,100)
+    C_LIGHT=(160,160,160); C_RULE=(215,215,215)
+    C_BG_HEAD=(240,240,240); C_BG_ALT=(249,249,249)
     C_WHITE=(255,255,255)
 
     try:
@@ -465,12 +469,28 @@ def generate_pdf(fid, uid, is_pro):
         paid=bool(data.get('uhrazeno',0))
         cf=data.get('cislo_full') or f"{data.get('prefix','')}{data.get('cislo','')}"
 
-        ar,ag,ab=70,90,120
+        # Barva kategorie
+        ar,ag,ab=70,100,160
         if data.get('barva'):
             try:
                 cv=data['barva'].lstrip('#')
                 ar,ag,ab=tuple(int(cv[i:i+2],16) for i in (0,2,4))
             except: pass
+
+        # Pomocné: světlá verze barvy (průsvitný efekt = míchání s bílou)
+        def tint(r,g,b,t=0.30):
+            """t=0.30 → 30% barvy + 70% bílé — "průsvitné" plochy"""
+            return (int(r*t+255*(1-t)), int(g*t+255*(1-t)), int(b*t+255*(1-t)))
+
+        def tint2(r,g,b,t=0.55):
+            """t=0.55 → středně sytá verze pro malé boxy"""
+            return (int(r*t+255*(1-t)), int(g*t+255*(1-t)), int(b*t+255*(1-t)))
+
+        ACCENT     = (ar,ag,ab)          # plná barva — tenké linky, pruh
+        TINT_LIGHT = tint(ar,ag,ab,0.18) # velmi světlá — záhlaví tabulky, pruhy
+        TINT_BOX   = tint(ar,ag,ab,0.40) # platební box pozadí
+        TINT_TOT   = tint(ar,ag,ab,0.50) # celkem box
+        TEXT_BOX   = tint(ar,ag,ab,0.90) # text v barevném boxu
 
         class PDF(FPDF):
             def __init__(self):
@@ -494,359 +514,526 @@ def generate_pdf(fid, uid, is_pro):
         def sdc(rgb): pdf.set_draw_color(*rgb)
         def lw(w): pdf.set_line_width(w)
 
-        def hrule(y,thick=0.2,color=C_RULE):
+        def hrule(y, thick=0.2, color=C_RULE, x1=None, x2=None):
             sdc(color); lw(thick)
-            pdf.line(ML,y,PAGE_W-MR,y); lw(0.2)
+            pdf.line(x1 or ML, y, x2 or PAGE_W-MR, y); lw(0.2)
 
-        def accent_line(y,thick=1.2,x1=None,x2=None):
-            sdc((ar,ag,ab)); lw(thick)
-            pdf.line(x1 or ML,y,x2 or PAGE_W-MR,y); lw(0.2)
+        def accent_line(y, thick=1.0, x1=None, x2=None):
+            sdc(ACCENT); lw(thick)
+            pdf.line(x1 or ML, y, x2 or PAGE_W-MR, y); lw(0.2)
 
-        # Adresní řádky
-        dod_lines=[]
-        if moje.get('adresa'): dod_lines.append(tx(moje['adresa']))
-        if moje.get('ico'):    dod_lines.append(tx(f"IC: {moje['ico']}"))
-        if moje.get('dic'):    dod_lines.append(tx(f"DIC: {moje['dic']}"))
-        if moje.get('email'):  dod_lines.append(tx(moje.get('email','')))
-        if moje.get('telefon'): dod_lines.append(tx(f"Mobil: {moje['telefon']}"))
-        odb_lines=[]
-        if data.get('k_adresa'): odb_lines.append(tx(data['k_adresa']))
-        if data.get('k_ico'):    odb_lines.append(tx(f"IC: {data['k_ico']}"))
-        if data.get('k_dic'):    odb_lines.append(tx(f"DIC: {data['k_dic']}"))
+        amt = data.get('castka_celkem', 0)
+        vs  = str(data.get('variabilni_symbol',''))
 
         def fmt_d_local(d):
-            try: return str(d)[:10].replace('-','.') if d else ''
-            except: return str(d)[:10] if d else ''
+            try: return str(d)[:10].replace('-','.')
+            except: return ''
 
-        # ══════════════════════════════════════════════════════════════
-        # LAYOUT KONSTANT
-        # ══════════════════════════════════════════════════════════════
-        SB_W   = 8
-        CONT_X = SB_W + ML
-        CONT_W = PAGE_W - SB_W - ML - MR
+        # ── Platební footer helper ──────────────────────────────────
+        def draw_footer(cx=None, cy=None):
+            fy=PAGE_H-12
+            accent_line(fy-3, thick=0.6)
+            parts=[]
+            if moje.get('nazev'):   parts.append(tx(moje['nazev']))
+            if moje.get('ico'):     parts.append(tx(f"IC: {moje['ico']}"))
+            if moje.get('email'):   parts.append(tx(moje.get('email','')))
+            if moje.get('telefon'): parts.append(tx(moje['telefon']))
+            pdf.set_font(fn,'',6.5); sc(C_LIGHT)
+            pdf.set_xy(ML, fy); pdf.cell(MW-18, 5, "   |   ".join(parts), 0,0,'C')
+            pdf.set_xy(PAGE_W-MR-18, fy); pdf.cell(18,5,f"str. {pdf.page_no()}",0,0,'R')
 
-        # ── Celostránkový barevný pruh vlevo ──────────────────────────
-        sfc((ar,ag,ab)); sdc((ar,ag,ab)); lw(0)
-        pdf.rect(0, 0, SB_W, PAGE_H, 'F'); lw(0.2)
-
-        # ── Pomocná fn: rotovaný štítek v pruhu ───────────────────────
-        def sidebar_label(label_text, y_top, height):
-            if height < 8: return
-            pdf.set_font(fn, 'B', 5.5); sc(C_WHITE)
-            cx = SB_W / 2
-            cy = y_top + height / 2
+        # ── QR helper ──────────────────────────────────────────────
+        def draw_qr(x, y, size=22):
+            if not moje.get('iban'): return False
             try:
-                pdf.rotate(90, cx, cy)
-                tw = max(height - 4, 4)
-                pdf.set_xy(cx - tw / 2, cy - SB_W / 2 + 1)
-                pdf.cell(tw, SB_W - 2, tx(label_text), 0, 0, 'C')
-                pdf.rotate(0)
-            except Exception:
-                pass
-
-        # ══════════════════════════════════════════════════════════════
-        # SEKCE 1 — IDENTIFIKAČNÍ ÚDAJE
-        # ══════════════════════════════════════════════════════════════
-        y = MT
-        sec1_top = y
-
-        # Logo (z kategorie) nebo název firmy
-        logo_drawn = False
-        logo_h = 0
-        if data.get('logo_blob'):
-            try:
-                lf = f"/tmp/logo_{fid}.png"
-                with open(lf, "wb") as f2:
-                    f2.write(data['logo_blob'])
-                pdf.image(lf, CONT_X, y, h=18)
-                logo_h = 18; logo_drawn = True
-                try: os.remove(lf)
-                except: pass
-            except: pass
-
-        if not logo_drawn:
-            pdf.set_font(fn, 'B', 11); sc(C_BLACK)
-            pdf.set_xy(CONT_X, y + 2)
-            pdf.cell(CONT_W / 2, 7, tx(moje.get('nazev',''))[:40], 0, 0, 'L')
-            logo_h = 10
-
-        # Číslo faktury vpravo nahoře
-        pdf.set_font(fn, '', 8); sc(C_MID)
-        pdf.set_xy(CONT_X + CONT_W / 2, y)
-        pdf.cell(CONT_W / 2, 5, 'Faktura', 0, 0, 'L')
-        pdf.set_font(fn, 'B', 20); sc(C_BLACK)
-        pdf.set_xy(CONT_X + CONT_W / 2, y + 5)
-        pdf.cell(CONT_W / 2, 10, tx(cf), 0, 0, 'L')
-
-        # Dodavatel — pod logem
-        y = max(y + logo_h, y + 22) + 4
-        pdf.set_font(fn, 'B', 7.5); sc(C_MID)
-        pdf.set_xy(CONT_X, y)
-        pdf.cell(CONT_W / 2, 4.5, tx('Dodavatel'), 0, 0, 'L'); y += 4.5
-        pdf.set_font(fn, 'B', 9); sc(C_BLACK)
-        pdf.set_xy(CONT_X, y)
-        pdf.cell(CONT_W / 2, 5.5, tx(moje.get('nazev',''))[:40], 0, 0, 'L'); y += 5.5
-
-        dod_y_start = y
-        pdf.set_font(fn, '', 8); sc(C_DARK)
-        for dl in dod_lines:
-            pdf.set_xy(CONT_X, y)
-            pdf.cell(CONT_W / 2 - 2, LINE_H, dl, 0, 0, 'L'); y += LINE_H
-
-        # Odběratel — pravý sloupec
-        odb_y = dod_y_start - 5.5
-        pdf.set_font(fn, 'B', 7.5); sc(C_MID)
-        pdf.set_xy(CONT_X + CONT_W / 2 + 4, odb_y)
-        pdf.cell(CONT_W / 2 - 4, 4.5, tx('Odberatel'), 0, 0, 'L'); odb_y += 4.5
-        pdf.set_font(fn, 'B', 9); sc(C_BLACK)
-        pdf.set_xy(CONT_X + CONT_W / 2 + 4, odb_y)
-        pdf.cell(CONT_W / 2 - 4, 5.5, tx(data.get('k_jmeno',''))[:40], 0, 0, 'L'); odb_y += 5.5
-        pdf.set_font(fn, '', 8); sc(C_DARK)
-        for ol in odb_lines:
-            pdf.set_xy(CONT_X + CONT_W / 2 + 4, odb_y)
-            pdf.cell(CONT_W / 2 - 4, LINE_H, ol, 0, 0, 'L'); odb_y += LINE_H
-
-        sec1_end = max(y, odb_y) + 4
-        sidebar_label("IDENTIFIKACNI UDAJE", sec1_top, sec1_end - sec1_top)
-
-        # Datum vystavení / splatnosti
-        hrule(sec1_end, thick=0.25, color=(200,200,200))
-        y = sec1_end + 4
-        pdf.set_font(fn, '', 8); sc(C_DARK)
-        pdf.set_xy(CONT_X, y)
-        pdf.cell(CONT_W, LINE_H,
-                 tx(f"Datum vystaveni:  {fmt_d_local(data.get('datum_vystaveni',''))}     "
-                    f"Datum splatnosti:  {fmt_d_local(data.get('datum_splatnosti',''))}"),
-                 0, 0, 'L')
-        y += LINE_H + 2
-
-        # ══════════════════════════════════════════════════════════════
-        # SEKCE 2 — PLATEBNÍ ÚDAJE
-        # ══════════════════════════════════════════════════════════════
-        sec2_top = y
-        hrule(sec2_top, thick=0.25, color=(200,200,200))
-        y += 3
-
-        ucet_str   = f"{moje.get('ucet','')} / {moje.get('banka','')}" if moje.get('ucet') else "-"
-        iban_str   = moje.get('iban','')
-        vs_str     = str(data.get('variabilni_symbol',''))
-        zpusob_str = tx(data.get('zpusob_uhrady','Prevodem'))
-        amt        = data.get('castka_celkem', 0)
-
-        col1_x = CONT_X + 2
-        col2_x = CONT_X + CONT_W * 0.34
-        col3_x = CONT_X + CONT_W * 0.60
-
-        def pay_kv(lbl, val, x, yy, cw=None):
-            cw = cw or (CONT_W * 0.25)
-            pdf.set_font(fn, '', 6.5); sc(C_LIGHT)
-            pdf.set_xy(x, yy); pdf.cell(cw, 3.5, tx(lbl), 0, 0, 'L')
-            pdf.set_font(fn, 'B', 7.5); sc(C_DARK)
-            pdf.set_xy(x, yy + 3.5); pdf.cell(cw, 4.5, tx(val), 0, 0, 'L')
-
-        pay_row_h = 10
-
-        # Box "K úhradě" — vpravo, přes oba řádky
-        box_w = CONT_W * 0.20
-        box_x = CONT_X + CONT_W - box_w
-        sfc((ar,ag,ab)); sdc((ar,ag,ab)); lw(0)
-        pdf.rect(box_x, y, box_w, pay_row_h * 2 + 1, 'F'); lw(0.2)
-        pdf.set_font(fn, '', 7); pdf.set_text_color(210,225,245)
-        pdf.set_xy(box_x + 2, y + 2)
-        pdf.cell(box_w - 4, 4, tx("K uhrade"), 0, 0, 'C')
-        pdf.set_font(fn, 'B', 12); sc(C_WHITE)
-        pdf.set_xy(box_x + 2, y + 8)
-        pdf.cell(box_w - 4, 7, fp(amt) + " Kc", 0, 0, 'C')
-
-        # Řádek 1 platebních info
-        pay_kv("Bankovni ucet", ucet_str, col1_x, y)
-        pay_kv("Symbol", f"variabilni:  {vs_str}", col2_x, y)
-        pay_kv("Zpusob platby:", zpusob_str, col3_x, y)
-        y += pay_row_h
-
-        # Řádek 2
-        if iban_str:
-            pay_kv("IBAN:", iban_str, col1_x, y, cw=CONT_W * 0.32)
-        pay_kv("", "konstantni:  0308", col2_x, y)
-        if data.get('datum_duzp'):
-            pay_kv("Datum DUZP:", fmt_d_local(data['datum_duzp']), col3_x, y)
-        y += pay_row_h
-
-        # QR kód
-        qr_drawn = False
-        if moje.get('iban'):
-            try:
-                ic  = str(moje['iban']).replace(" ","").upper()
-                qr_s = (f"SPD*1.0*ACC:{ic}*AM:{amt}*CC:CZK"
-                        f"*X-VS:{vs_str}*MSG:{rm_acc('Faktura ' + cf)}")
-                qri = qrcode.QRCode(version=1,
-                                    error_correction=qrcode.constants.ERROR_CORRECT_M,
-                                    box_size=4, border=0)
-                qri.add_data(qr_s); qri.make(fit=True)
-                qi  = qri.make_image(fill_color="black", back_color="white")
-                qf  = f"/tmp/qr_{fid}.png"; qi.save(qf)
-                pdf.image(qf, col1_x, y + 1, 18)
+                ic=str(moje['iban']).replace(" ","").upper()
+                qs=(f"SPD*1.0*ACC:{ic}*AM:{amt}*CC:CZK"
+                    f"*X-VS:{vs}*MSG:{rm_acc('Faktura '+cf)}")
+                qri=qrcode.QRCode(version=1,
+                    error_correction=qrcode.constants.ERROR_CORRECT_M,
+                    box_size=4,border=0)
+                qri.add_data(qs); qri.make(fit=True)
+                qi=qri.make_image(fill_color="black",back_color="white")
+                qf=f"/tmp/qr_{fid}.png"; qi.save(qf)
+                pdf.image(qf,x,y,size)
                 try: os.remove(qf)
                 except: pass
-                pdf.set_font(fn, 'B', 6); sc(C_MID)
-                pdf.set_xy(col1_x + 20, y + 6)
-                pdf.cell(30, 3.5, tx("QR Platba+F"), 0, 0, 'L')
-                qr_drawn = True
-            except: pass
+                pdf.set_font(fn,'',6); sc(C_MID)
+                pdf.set_xy(x, y+size+0.5); pdf.cell(size,3,"QR Platba+F",0,0,'C')
+                return True
+            except: return False
 
-        y += (20 if qr_drawn else 4) + 3
-        sec2_end = y
-        sidebar_label("PLATEBNI UDAJE", sec2_top, sec2_end - sec2_top)
+        # ══════════════════════════════════════════════════════════
+        # TEMPLATE 1 — iDoklad Modern (levý pruh + sekční štítky)
+        # ══════════════════════════════════════════════════════════
+        if template == 1:
+            SB_W   = 8
+            CONT_X = SB_W + ML
+            CONT_W = PAGE_W - SB_W - ML - MR
 
-        # ══════════════════════════════════════════════════════════════
-        # SEKCE 3 — FAKTURUJEME VÁM (tabulka položek)
-        # ══════════════════════════════════════════════════════════════
-        hrule(sec2_end, thick=0.25, color=(200,200,200))
-        y = sec2_end + 3
-        sec3_top = y
+            # ── Barevný pruh vlevo (plná barva) ───────────────────
+            sfc(ACCENT); sdc(ACCENT); lw(0)
+            pdf.rect(0, 0, SB_W, PAGE_H, 'F'); lw(0.2)
 
-        # Úvodní text
-        if data.get('uvodni_text') and str(data['uvodni_text']).strip():
-            pdf.set_font(fn, 'B', 7.5); sc(C_DARK)
+            def sidebar_label(label, y_top, height):
+                if height < 9: return
+                pdf.set_font(fn,'B',5.5); sc(C_WHITE)
+                cx=SB_W/2; cy=y_top+height/2
+                try:
+                    pdf.rotate(90, cx, cy)
+                    tw=max(height-4,4)
+                    pdf.set_xy(cx-tw/2, cy-SB_W/2+1)
+                    pdf.cell(tw, SB_W-2, tx(label), 0,0,'C')
+                    pdf.rotate(0)
+                except: pass
+
+            # ── SEKCE 1 — IDENTIFIKAČNÍ ÚDAJE ─────────────────────
+            y=MT; sec1_top=y
+
+            # Logo nebo název nahoře vlevo
+            logo_h=0; logo_drawn=False
+            if data.get('logo_blob'):
+                try:
+                    lf=f"/tmp/logo_{fid}.png"
+                    with open(lf,"wb") as f2: f2.write(data['logo_blob'])
+                    pdf.image(lf, CONT_X, y, h=16)
+                    logo_h=16; logo_drawn=True
+                    try: os.remove(lf)
+                    except: pass
+                except: pass
+
+            # "Faktura" label + velké číslo vpravo
+            pdf.set_font(fn,'',8); sc(C_MID)
+            pdf.set_xy(CONT_X+CONT_W*0.52, y)
+            pdf.cell(CONT_W*0.48, 5, "Faktura", 0,0,'L')
+            pdf.set_font(fn,'B',22); sc(C_BLACK)
+            pdf.set_xy(CONT_X+CONT_W*0.52, y+4)
+            pdf.cell(CONT_W*0.48, 11, tx(cf), 0,0,'L')
+
+            # Čárový kód (simulace — tenké svislé linie)
+            bc_x=CONT_X+CONT_W*0.52; bc_y=y+15; bc_w=45; bc_h=6
+            sdc(C_DARK); lw(0.4)
+            import random as _rnd; _rnd.seed(hash(cf))
+            bx=bc_x
+            while bx < bc_x+bc_w:
+                w=_rnd.choice([0.4,0.6,0.9,0.4])
+                pdf.line(bx,bc_y,bx,bc_y+bc_h); bx+=w+_rnd.choice([0.4,0.6,0.9])
+            lw(0.2)
+
+            # Dodavatel vlevo
+            y_dod=y+(logo_h+4 if logo_drawn else 0)
+            pdf.set_font(fn,'B',7); sc(C_MID)
+            pdf.set_xy(CONT_X, y_dod); pdf.cell(CONT_W*0.48,4,"Dodavatel",0,0,'L'); y_dod+=4
+            pdf.set_font(fn,'B',9); sc(C_BLACK)
+            pdf.set_xy(CONT_X, y_dod)
+            pdf.cell(CONT_W*0.48,5.5,tx(moje.get('nazev',''))[:38],0,0,'L'); y_dod+=5.5
+            pdf.set_font(fn,'',8); sc(C_DARK)
+            for line in [moje.get('adresa',''),
+                         f"IC: {moje.get('ico','')}" if moje.get('ico') else "",
+                         "Nejsme platci DPH"]:
+                if line:
+                    pdf.set_xy(CONT_X, y_dod)
+                    pdf.cell(CONT_W*0.48,LINE_H,tx(line),0,0,'L'); y_dod+=LINE_H
+
+            # Kontaktní údaje pod adresou
+            y_dod+=2
+            pdf.set_font(fn,'B',7.5); sc(C_DARK)
+            pdf.set_xy(CONT_X, y_dod); pdf.cell(CONT_W*0.48,4.5,"Kontaktni udaje",0,0,'L'); y_dod+=4.5
+            pdf.set_font(fn,'',8); sc(C_DARK)
+            kont=[]; 
+            if moje.get('email'):   kont.append(("E-mail:", tx(moje['email'])))
+            if moje.get('telefon'): kont.append(("Mobil:", tx(moje['telefon'])))
+            for lbl,val in kont:
+                pdf.set_xy(CONT_X, y_dod)
+                pdf.set_font(fn,'',7.5); sc(C_MID)
+                pdf.cell(18,LINE_H,lbl,0,0,'L')
+                pdf.set_font(fn,'',7.5); sc(C_DARK)
+                pdf.cell(CONT_W*0.42,LINE_H,val,0,0,'L'); y_dod+=LINE_H
+
+            # Odběratel vpravo (stejná výška jako dodavatel)
+            y_odb=MT+4
+            pdf.set_font(fn,'B',8.5); sc(C_BLACK)
+            pdf.set_xy(CONT_X+CONT_W*0.52, y_odb)
+            pdf.cell(CONT_W*0.48,6,"Odberatel",0,0,'L'); y_odb+=6
+            pdf.set_font(fn,'B',9); sc(C_BLACK)
+            pdf.set_xy(CONT_X+CONT_W*0.52, y_odb)
+            pdf.cell(CONT_W*0.48,5.5,tx(data.get('k_jmeno',''))[:38],0,0,'L'); y_odb+=5.5
+            pdf.set_font(fn,'',8); sc(C_DARK)
+            for line in [data.get('k_adresa',''),
+                         f"IC: {data.get('k_ico','')}" if data.get('k_ico') else "",
+                         f"DIC: {data.get('k_dic','')}" if data.get('k_dic') else ""]:
+                if line:
+                    pdf.set_xy(CONT_X+CONT_W*0.52, y_odb)
+                    pdf.cell(CONT_W*0.48,LINE_H,tx(line),0,0,'L'); y_odb+=LINE_H
+
+            # Lehký rámeček kolem odběratele
+            sdc(C_RULE); lw(0.2)
+            pdf.rect(CONT_X+CONT_W*0.51-1, MT+1, CONT_W*0.50, y_odb-MT+2, 'D')
+
+            y=max(y_dod, y_odb)+4
+            sec1_end=y
+            sidebar_label("IDENTIFIKACNI UDAJE", sec1_top, sec1_end-sec1_top)
+
+            # Datum
+            hrule(y, thick=0.25)
+            y+=4
+            pdf.set_font(fn,'',8.5); sc(C_DARK)
             pdf.set_xy(CONT_X, y)
-            pdf.multi_cell(CONT_W, LINE_H, tx(data['uvodni_text']))
-            y = pdf.get_y() + 2
+            pdf.cell(CONT_W,LINE_H,
+                     tx(f"Datum vystaveni:  {fmt_d_local(data.get('datum_vystaveni',''))}     "
+                        f"Datum splatnosti:  {fmt_d_local(data.get('datum_splatnosti',''))}"),
+                     0,0,'L')
+            y+=LINE_H+3
 
-        # Záhlaví tabulky
-        COL_NAME = CONT_W * 0.52
-        COL_QTY  = CONT_W * 0.12
-        COL_UNIT = CONT_W * 0.18
-        COL_TOT  = CONT_W * 0.18
+            # ── SEKCE 2 — PLATEBNÍ ÚDAJE ──────────────────────────
+            sec2_top=y
+            # Světle zbarvený pruh sekce
+            sfc(TINT_LIGHT); lw(0)
+            pdf.rect(CONT_X, y, CONT_W, 26, 'F'); lw(0.2)
+            sdc(TINT_BOX); lw(0.5)
+            pdf.rect(CONT_X, y, CONT_W, 26, 'D'); lw(0.2)
+            y+=4
 
-        sfc(C_BG_HEAD); sdc(C_RULE); lw(0.2)
-        pdf.rect(CONT_X, y, CONT_W, HDR_H, 'FD')
-        pdf.set_font(fn, 'B', 7.5); sc(C_DARK)
-        pdf.set_xy(CONT_X + 3, y + 2)
-        pdf.cell(COL_NAME - 3, 5, tx("Oznaceni dodavky"), 0, 0, 'L')
-        pdf.set_xy(CONT_X + COL_NAME, y + 2)
-        pdf.cell(COL_QTY, 5, tx("Pocet"), 0, 0, 'C')
-        pdf.set_xy(CONT_X + COL_NAME + COL_QTY, y + 2)
-        pdf.cell(COL_UNIT, 5, tx("Cena/mj"), 0, 0, 'R')
-        pdf.set_xy(CONT_X + COL_NAME + COL_QTY + COL_UNIT, y + 2)
-        pdf.cell(COL_TOT, 5, tx("Celkem"), 0, 0, 'R')
-        accent_line(y + HDR_H, thick=0.8,
-                    x1=CONT_X, x2=CONT_X + CONT_W)
-        y += HDR_H
+            # Záhlaví sloupců
+            col1x=CONT_X+3; col2x=CONT_X+CONT_W*0.35; col3x=CONT_X+CONT_W*0.58
+            box_w=CONT_W*0.19; box_x=CONT_X+CONT_W-box_w
 
-        for idx, item in enumerate(pol):
-            nazev = str(item.get('nazev','')).strip()
-            if not nazev: continue
-            est = max(1, (len(nazev) + 59) // 60)
-            rh  = max(ROW_H, est * LINE_H + 3)
+            pdf.set_font(fn,'',6.5); sc(C_MID)
+            for x2,t2 in [(col1x,"Bankovni ucet"),(col2x,"Symbol"),(col3x,"Zpusob platby")]:
+                pdf.set_xy(x2,y); pdf.cell(50,3.5,t2,0,0,'L')
+            y+=3.5
 
-            if y + rh > MAX_Y - 35:
-                sidebar_label("FAKTURUJEME VAM", sec3_top, y - sec3_top)
-                _draw_footer(pdf, fn, moje, tx, sc, accent_line, hrule,
-                             PAGE_H, ML, MW, C_LIGHT, C_RULE, ar, ag, ab)
-                pdf.add_page(); y = MT; sec3_top = y
-                # Pruh na nové stránce
-                sfc((ar,ag,ab)); sdc((ar,ag,ab)); lw(0)
-                pdf.rect(0, 0, SB_W, PAGE_H, 'F'); lw(0.2)
-                sfc(C_BG_HEAD); sdc(C_RULE); lw(0.2)
-                pdf.rect(CONT_X, y, CONT_W, HDR_H, 'FD')
-                pdf.set_font(fn, 'B', 7.5); sc(C_DARK)
-                pdf.set_xy(CONT_X + 3, y + 2)
-                pdf.cell(COL_NAME - 3, 5, tx("Oznaceni dodavky (pokrac.)"), 0, 0, 'L')
-                pdf.set_xy(CONT_X + COL_NAME + COL_QTY + COL_UNIT, y + 2)
-                pdf.cell(COL_TOT, 5, tx("Celkem"), 0, 0, 'R')
-                accent_line(y + HDR_H, thick=0.8,
-                            x1=CONT_X, x2=CONT_X + CONT_W)
-                y += HDR_H
+            ucet=f"{moje.get('ucet','')}/{moje.get('banka','')}" if moje.get('ucet') else "-"
+            iban=moje.get('iban','')
 
-            if idx % 2 == 1:
-                sfc(C_BG_ALT); lw(0)
-                pdf.rect(CONT_X, y, CONT_W, rh, 'F'); lw(0.2)
+            pdf.set_font(fn,'B',8.5); sc(C_BLACK)
+            pdf.set_xy(col1x,y); pdf.cell(CONT_W*0.30,5,tx(ucet),0,0,'L')
+            # variabilní
+            pdf.set_font(fn,'',7.5); sc(C_MID)
+            pdf.set_xy(col2x,y); pdf.cell(18,5,"variabilni:",0,0,'L')
+            pdf.set_font(fn,'B',7.5); sc(C_BLACK)
+            pdf.set_xy(col2x+20,y); pdf.cell(30,5,tx(vs),0,0,'L')
+            # způsob
+            pdf.set_font(fn,'',8.5); sc(C_DARK)
+            pdf.set_xy(col3x,y); pdf.cell(CONT_W*0.20,5,tx(data.get('zpusob_uhrady','Prevodem')),0,0,'L')
+            y+=5.5
 
-            pdf.set_font(fn, '', 8.5); sc(C_DARK)
-            pdf.set_xy(CONT_X + 3, y + 2)
-            pdf.multi_cell(COL_NAME - 6, LINE_H, tx(nazev), 0, 'L')
+            if iban:
+                pdf.set_font(fn,'',7.5); sc(C_DARK)
+                pdf.set_xy(col1x,y); pdf.cell(CONT_W*0.32,LINE_H,tx(f"IBAN: {iban}"),0,0,'L')
+            # konstantní
+            pdf.set_font(fn,'',7.5); sc(C_MID)
+            pdf.set_xy(col2x,y); pdf.cell(18,LINE_H,"konstantni:",0,0,'L')
+            pdf.set_font(fn,'B',7.5); sc(C_BLACK)
+            pdf.set_xy(col2x+20,y); pdf.cell(30,LINE_H,"0308",0,0,'L')
 
-            # Počet: vždy 1,00 (položky ukládáme jako celkovou cenu)
-            pdf.set_font(fn, '', 8.5); sc(C_MID)
-            pdf.set_xy(CONT_X + COL_NAME, y + (rh - LINE_H) / 2)
-            pdf.cell(COL_QTY, LINE_H, "1,00", 0, 0, 'C')
+            # SWIFT
+            swift_y=y+LINE_H
+            if moje.get('banka'):
+                pdf.set_font(fn,'',7.5); sc(C_DARK)
+                pdf.set_xy(col1x, swift_y)
+                pdf.cell(CONT_W*0.32,LINE_H,tx(f"SWIFT: CEKOCZPP"),0,0,'L')
 
-            # Cena za mj = celkem
-            pdf.set_xy(CONT_X + COL_NAME + COL_QTY, y + (rh - LINE_H) / 2)
-            pdf.cell(COL_UNIT, LINE_H, fp(item.get('cena', 0)), 0, 0, 'R')
+            # K úhradě BOX
+            sfc(TINT_BOX); sdc(TINT_BOX); lw(0)
+            pdf.rect(box_x, sec2_top+2, box_w, 22, 'F'); lw(0.2)
+            sdc(ACCENT); lw(0.6)
+            pdf.rect(box_x, sec2_top+2, box_w, 22, 'D'); lw(0.2)
+            pdf.set_font(fn,'',7); sc(TEXT_BOX)
+            pdf.set_xy(box_x+2, sec2_top+5)
+            pdf.cell(box_w-4, 4, "K uhrade", 0,0,'C')
+            pdf.set_font(fn,'B',13); sc(ACCENT)
+            pdf.set_xy(box_x+2, sec2_top+11)
+            pdf.cell(box_w-4, 7, fp(amt)+" Kc", 0,0,'C')
 
-            # Celkem
-            pdf.set_font(fn, 'B', 8.5); sc(C_DARK)
-            pdf.set_xy(CONT_X + COL_NAME + COL_QTY + COL_UNIT,
-                       y + (rh - LINE_H) / 2)
-            pdf.cell(COL_TOT, LINE_H, fp(item.get('cena', 0)), 0, 0, 'R')
+            y=sec2_top+30
 
-            hrule(y + rh, thick=0.15); y += rh
+            # QR kód
+            qr_y=y
+            qr_drawn=draw_qr(CONT_X+CONT_W-24, y, 22)
+            sec2_end=y+(24 if qr_drawn else 4)
+            sidebar_label("PLATEBNI UDAJE", sec2_top, sec2_end-sec2_top)
 
-        sec3_end = y
-        sidebar_label("FAKTURUJEME VAM", sec3_top, sec3_end - sec3_top)
+            # ── SEKCE 3 — FAKTURUJEME VÁM ─────────────────────────
+            y=sec2_end+3
+            hrule(y, thick=0.25); y+=4
+            sec3_top=y
 
-        # ══════════════════════════════════════════════════════════════
-        # SEKCE 4 — REKAPITULACE
-        # ══════════════════════════════════════════════════════════════
-        y += 5
-        sec4_top = y
-        hrule(y, thick=0.25, color=(200,200,200))
-        y += 4
+            if data.get('uvodni_text') and str(data['uvodni_text']).strip():
+                pdf.set_font(fn,'',8); sc(C_DARK)
+                pdf.set_xy(CONT_X, y)
+                pdf.multi_cell(CONT_W, LINE_H, tx(data['uvodni_text']))
+                y=pdf.get_y()+2
 
-        note = ("Dovolujeme si Vas upozornit, ze v pripade nedodrzeni data splatnosti "
-                "uvedeneho na fakture Vam muzeme uctovat zakonny urok z prodleni.")
-        pdf.set_font(fn, '', 7.5); sc(C_LIGHT)
-        pdf.set_xy(CONT_X, y)
-        pdf.multi_cell(CONT_W * 0.60, LINE_H - 0.5, tx(note))
-        note_end = pdf.get_y()
+            COL_N=CONT_W*0.53; COL_Q=CONT_W*0.12; COL_U=CONT_W*0.18; COL_T=CONT_W*0.17
 
-        # Celkem k úhradě — barevný box vpravo
-        tot_w = CONT_W * 0.36
-        tot_x = CONT_X + CONT_W - tot_w
-        sfc((ar,ag,ab)); sdc((ar,ag,ab)); lw(0)
-        pdf.rect(tot_x, y, tot_w, 13, 'F'); lw(0.2)
-        pdf.set_font(fn, '', 7); pdf.set_text_color(210,225,245)
-        pdf.set_xy(tot_x + 3, y + 2)
-        pdf.cell(tot_w - 6, 4, tx("Celkem k uhrade:"), 0, 0, 'L')
-        pdf.set_font(fn, 'B', 13); sc(C_WHITE)
-        pdf.set_xy(tot_x + 3, y + 7)
-        pdf.cell(tot_w - 6, 6, fp(amt) + " Kc", 0, 0, 'R')
+            # Záhlaví tabulky
+            sfc(TINT_LIGHT); sdc(C_RULE); lw(0.2)
+            pdf.rect(CONT_X,y,CONT_W,HDR_H,'FD')
+            pdf.set_font(fn,'B',7.5); sc(C_DARK)
+            for xp,ww,al,lbl in [(CONT_X+3,COL_N-3,'L',"Oznaceni dodavky"),
+                                  (CONT_X+COL_N,COL_Q,'C',"Pocet m.j."),
+                                  (CONT_X+COL_N+COL_Q,COL_U,'R',"Cena za m.j."),
+                                  (CONT_X+COL_N+COL_Q+COL_U,COL_T,'R',"Celkem")]:
+                pdf.set_xy(xp,y+2); pdf.cell(ww,5,lbl,0,0,al)
+            # Spodní linka záhlaví v barvě
+            accent_line(y+HDR_H, thick=0.8, x1=CONT_X, x2=CONT_X+CONT_W)
+            y+=HDR_H
 
-        y = max(note_end, y + 15) + 4
-        sidebar_label("REKAPITULACE", sec4_top,
-                      min(y, PAGE_H - 18) - sec4_top)
+            for idx,item in enumerate(pol):
+                nazev=str(item.get('nazev','')).strip()
+                if not nazev: continue
+                lines=max(1,(len(nazev)+59)//60)
+                rh=max(ROW_H, lines*LINE_H+3)
 
-        # ══════════════════════════════════════════════════════════════
-        # VODOZNAK "ZAPLACENO"
-        # ══════════════════════════════════════════════════════════════
+                if y+rh>MAX_Y-30:
+                    sidebar_label("FAKTURUJEME VAM", sec3_top, y-sec3_top)
+                    draw_footer()
+                    pdf.add_page(); y=MT; sec3_top=y
+                    sfc(ACCENT); sdc(ACCENT); lw(0)
+                    pdf.rect(0,0,SB_W,PAGE_H,'F'); lw(0.2)
+                    sfc(TINT_LIGHT); sdc(C_RULE); lw(0.2)
+                    pdf.rect(CONT_X,y,CONT_W,HDR_H,'FD')
+                    pdf.set_font(fn,'B',7.5); sc(C_DARK)
+                    pdf.set_xy(CONT_X+3,y+2)
+                    pdf.cell(COL_N-3,5,"Oznaceni dodavky (pokrac.)",0,0,'L')
+                    pdf.set_xy(CONT_X+COL_N+COL_Q+COL_U,y+2)
+                    pdf.cell(COL_T,5,"Celkem",0,0,'R')
+                    accent_line(y+HDR_H,thick=0.8,x1=CONT_X,x2=CONT_X+CONT_W)
+                    y+=HDR_H
+
+                if idx%2==1:
+                    sfc(C_BG_ALT); lw(0)
+                    pdf.rect(CONT_X,y,CONT_W,rh,'F'); lw(0.2)
+
+                pdf.set_font(fn,'',8.5); sc(C_DARK)
+                pdf.set_xy(CONT_X+3,y+2)
+                pdf.multi_cell(COL_N-6, LINE_H, tx(nazev),0,'L')
+
+                mid_y=y+(rh-LINE_H)/2
+                pdf.set_font(fn,'',8.5); sc(C_MID)
+                pdf.set_xy(CONT_X+COL_N, mid_y); pdf.cell(COL_Q,LINE_H,"1,00",0,0,'C')
+                pdf.set_xy(CONT_X+COL_N+COL_Q, mid_y); pdf.cell(COL_U,LINE_H,fp(item.get('cena',0)),0,0,'R')
+                pdf.set_font(fn,'B',8.5); sc(C_BLACK)
+                pdf.set_xy(CONT_X+COL_N+COL_Q+COL_U, mid_y); pdf.cell(COL_T,LINE_H,fp(item.get('cena',0)),0,0,'R')
+                hrule(y+rh, thick=0.15); y+=rh
+
+            sec3_end=y
+            sidebar_label("FAKTURUJEME VAM", sec3_top, sec3_end-sec3_top)
+
+            # ── SEKCE 4 — REKAPITULACE ───────────────────────────
+            y+=5; sec4_top=y
+            hrule(y, thick=0.25); y+=4
+
+            note=("Dovolujeme si Vas upozornit, ze v pripade nedodrzeni data splatnosti "
+                  "uvedeneho na fakture Vam muzeme uctovat zakonny urok z prodleni.")
+            pdf.set_font(fn,'',7.5); sc(C_MID)
+            pdf.set_xy(CONT_X,y)
+            pdf.multi_cell(CONT_W*0.57, LINE_H-0.5, tx(note))
+            note_end=pdf.get_y()
+
+            y2=y
+            pdf.set_font(fn,'B',8); sc(C_DARK)
+            pdf.set_xy(CONT_X, note_end+3)
+            pdf.cell(CONT_W*0.30, 5, "Razitko a podpis:", 0,0,'L')
+
+            # Celkem k úhradě box
+            tot_w=CONT_W*0.38; tot_x=CONT_X+CONT_W-tot_w
+            sfc(TINT_TOT); sdc(ACCENT); lw(0.5)
+            pdf.rect(tot_x, y2, tot_w, 11, 'FD'); lw(0.2)
+            pdf.set_font(fn,'',7.5); sc(TEXT_BOX)
+            pdf.set_xy(tot_x+3, y2+2)
+            pdf.cell(tot_w-6, 4, "Celkem k uhrade:", 0,0,'L')
+            pdf.set_font(fn,'B',12); sc(ACCENT)
+            pdf.set_xy(tot_x+3, y2+6)
+            pdf.cell(tot_w-6, 5.5, fp(amt)+" Kc", 0,0,'R')
+
+            y=max(note_end+10, y2+15)+4
+            sidebar_label("REKAPITULACE", sec4_top, min(y,PAGE_H-18)-sec4_top)
+
+        # ══════════════════════════════════════════════════════════
+        # TEMPLATE 2 — iDoklad Classic (bez pruhu)
+        # ══════════════════════════════════════════════════════════
+        else:
+            y=MT
+
+            # Záhlaví: "Faktura č. XXXXX" vlevo, čárový kód vpravo
+            pdf.set_font(fn,'B',15); sc(C_BLACK)
+            pdf.set_xy(ML,y)
+            pdf.cell(MW*0.55,8,f"Faktura c. {tx(cf)}",0,0,'L')
+            # čárový kód simulace
+            bc_x=ML+MW*0.58; bc_y=y+1; bc_h=7
+            sdc(C_DARK); lw(0.4)
+            import random as _rnd2; _rnd2.seed(hash(cf)+1)
+            bx=bc_x
+            while bx<bc_x+45:
+                w=_rnd2.choice([0.4,0.6,0.9,0.4])
+                pdf.line(bx,bc_y,bx,bc_y+bc_h); bx+=w+_rnd2.choice([0.4,0.6,0.9])
+            lw(0.2)
+            y+=10
+            hrule(y, thick=0.4, color=(180,180,180)); y+=4
+
+            # Dodavatel
+            pdf.set_font(fn,'B',8); sc(C_DARK)
+            pdf.set_xy(ML,y); pdf.cell(MW*0.48,4.5,"Dodavatel",0,0,'L'); y+=4.5
+            pdf.set_font(fn,'B',9.5); sc(C_BLACK)
+            pdf.set_xy(ML,y); pdf.cell(MW*0.48,5.5,tx(moje.get('nazev',''))[:40],0,0,'L'); y+=5.5
+            pdf.set_font(fn,'',8); sc(C_DARK)
+            dod_lines=[]
+            if moje.get('adresa'): dod_lines.append(moje['adresa'])
+            dod_lines.append(f"IC: {moje.get('ico','')}" if moje.get('ico') else "")
+            if moje.get('email'):   dod_lines.append(f"Email: {moje['email']}")
+            if moje.get('telefon'): dod_lines.append(moje['telefon'])
+            dod_lines.append("Nejsme platci DPH")
+            for dl in dod_lines:
+                if dl:
+                    pdf.set_xy(ML,y); pdf.cell(MW*0.48,LINE_H,tx(dl),0,0,'L'); y+=LINE_H
+            y+=4
+            hrule(y, thick=0.3, color=(185,185,185)); y+=4
+
+            # Platební info vlevo | Odběratel vpravo
+            py=y
+            ucet=f"{moje.get('ucet','')}/{moje.get('banka','')}" if moje.get('ucet') else "-"
+            iban=moje.get('iban','')
+            pay_items=[
+                ("Zpusob uhrady:", tx(data.get('zpusob_uhrady','Prevodem')), True),
+                ("Bankovni ucet:", tx(ucet), True),
+                ("IBAN:", tx(iban), False),
+                ("SWIFT:", "CEKOCZPP", False),
+                ("Variabilni symbol:", tx(vs), False),
+                ("Konstantni symbol:", "0308", False),
+            ]
+            pdf.set_font(fn,'',8); 
+            for lbl,val,bold in pay_items:
+                if not val or val=="-": continue
+                sc(C_MID)
+                pdf.set_xy(ML,py); pdf.cell(35,LINE_H,lbl,0,0,'L')
+                if bold: pdf.set_font(fn,'B',8)
+                else: pdf.set_font(fn,'',8)
+                sc(C_BLACK)
+                pdf.set_xy(ML+35,py); pdf.cell(50,LINE_H,val,0,0,'L'); py+=LINE_H
+            # Datum
+            py+=2
+            pdf.set_font(fn,'',8); sc(C_MID)
+            pdf.set_xy(ML,py); pdf.cell(35,LINE_H,"Datum vystaveni:",0,0,'L')
+            pdf.set_font(fn,'',8); sc(C_DARK)
+            pdf.set_xy(ML+35,py); pdf.cell(50,LINE_H,fmt_d_local(data.get('datum_vystaveni','')),0,0,'L'); py+=LINE_H
+            pdf.set_font(fn,'B',8); sc(C_MID)
+            pdf.set_xy(ML,py); pdf.cell(35,LINE_H,"Datum splatnosti:",0,0,'L')
+            pdf.set_font(fn,'B',8); sc(C_BLACK)
+            pdf.set_xy(ML+35,py); pdf.cell(50,LINE_H,fmt_d_local(data.get('datum_splatnosti','')),0,0,'L'); py+=LINE_H
+
+            # Odběratel vpravo
+            oy=y
+            pdf.set_font(fn,'B',8.5); sc(C_BLACK)
+            pdf.set_xy(ML+MW*0.53,oy); pdf.cell(MW*0.47,5.5,"Odberatel",0,0,'L'); oy+=5.5
+            pdf.set_font(fn,'B',9.5); sc(C_BLACK)
+            pdf.set_xy(ML+MW*0.53,oy); pdf.cell(MW*0.47,5.5,tx(data.get('k_jmeno',''))[:38],0,0,'L'); oy+=5.5
+            pdf.set_font(fn,'',8); sc(C_DARK)
+            for ol in [data.get('k_adresa',''),
+                       f"IC: {data.get('k_ico','')}" if data.get('k_ico') else "",
+                       f"DIC: {data.get('k_dic','')}" if data.get('k_dic') else ""]:
+                if ol:
+                    pdf.set_xy(ML+MW*0.53,oy); pdf.cell(MW*0.47,LINE_H,tx(ol),0,0,'L'); oy+=LINE_H
+
+            y=max(py,oy)+4
+            hrule(y, thick=0.3, color=(185,185,185)); y+=4
+
+            # Úvodní text
+            if data.get('uvodni_text') and str(data['uvodni_text']).strip():
+                pdf.set_font(fn,'B',8); sc(C_DARK)
+                pdf.set_xy(ML,y)
+                pdf.multi_cell(MW, LINE_H, tx(data['uvodni_text']))
+                y=pdf.get_y()+2
+
+            # Tabulka
+            COL_N=MW*0.53; COL_Q=MW*0.12; COL_U=MW*0.18; COL_T=MW*0.17
+            sfc(TINT_LIGHT); sdc(C_RULE); lw(0.3)
+            pdf.rect(ML,y,MW,HDR_H,'FD')
+            pdf.set_font(fn,'B',7.5); sc(C_DARK)
+            for xp,ww,al,lbl in [(ML+3,COL_N-3,'L',"OZNACENI DODAVKY"),
+                                  (ML+COL_N,COL_Q,'C',"POCET M.J."),
+                                  (ML+COL_N+COL_Q,COL_U,'R',"CENA ZA M.J."),
+                                  (ML+COL_N+COL_Q+COL_U,COL_T,'R',"CELKEM")]:
+                pdf.set_xy(xp,y+2); pdf.cell(ww,5,lbl,0,0,al)
+            y+=HDR_H
+
+            for idx,item in enumerate(pol):
+                nazev=str(item.get('nazev','')).strip()
+                if not nazev: continue
+                lines=max(1,(len(nazev)+59)//60)
+                rh=max(ROW_H,lines*LINE_H+3)
+
+                if y+rh>MAX_Y-30:
+                    draw_footer()
+                    pdf.add_page(); y=MT
+                    sfc(TINT_LIGHT); sdc(C_RULE); lw(0.3)
+                    pdf.rect(ML,y,MW,HDR_H,'FD')
+                    pdf.set_font(fn,'B',7.5); sc(C_DARK)
+                    pdf.set_xy(ML+3,y+2); pdf.cell(COL_N-3,5,"OZNACENI DODAVKY (pokrac.)",0,0,'L')
+                    pdf.set_xy(ML+COL_N+COL_Q+COL_U,y+2); pdf.cell(COL_T,5,"CELKEM",0,0,'R')
+                    y+=HDR_H
+
+                if idx%2==1:
+                    sfc(C_BG_ALT); lw(0)
+                    pdf.rect(ML,y,MW,rh,'F'); lw(0.2)
+
+                mid_y=y+(rh-LINE_H)/2
+                pdf.set_font(fn,'',8.5); sc(C_DARK)
+                pdf.set_xy(ML+3,y+2); pdf.multi_cell(COL_N-6,LINE_H,tx(nazev),0,'L')
+                pdf.set_font(fn,'',8.5); sc(C_MID)
+                pdf.set_xy(ML+COL_N,mid_y); pdf.cell(COL_Q,LINE_H,"1,00",0,0,'C')
+                pdf.set_xy(ML+COL_N+COL_Q,mid_y); pdf.cell(COL_U,LINE_H,fp(item.get('cena',0)),0,0,'R')
+                pdf.set_font(fn,'B',8.5); sc(C_BLACK)
+                pdf.set_xy(ML+COL_N+COL_Q+COL_U,mid_y); pdf.cell(COL_T,LINE_H,fp(item.get('cena',0)),0,0,'R')
+                hrule(y+rh,thick=0.2); y+=rh
+
+            y+=4
+            # Poznámka
+            note=("Dovolujeme si Vas upozornit, ze v pripade nedodrzeni data splatnosti "
+                  "uvedeneho na fakture Vam muzeme uctovat zakonny urok z prodleni.")
+            pdf.set_font(fn,'',7.5); sc(C_MID)
+            pdf.set_xy(ML,y)
+            pdf.multi_cell(MW*0.62, LINE_H-0.5, tx(note))
+            note_end=pdf.get_y()
+
+            # QR vlevo
+            qr_y=y
+            draw_qr(ML, y+2, 22)
+
+            # Celkem k úhradě box vpravo
+            tot_w=MW*0.38; tot_x=ML+MW-tot_w
+            sfc(TINT_TOT); sdc(ACCENT); lw(0.5)
+            pdf.rect(tot_x, y, tot_w, 12, 'FD'); lw(0.2)
+            pdf.set_font(fn,'B',8); sc(TEXT_BOX)
+            pdf.set_xy(tot_x+3, y+2.5)
+            pdf.cell(tot_w-6,4,"Celkem k uhrade:",0,0,'L')
+            pdf.set_font(fn,'B',13); sc(ACCENT)
+            pdf.set_xy(tot_x+3,y+7)
+            pdf.cell(tot_w-6,5.5,fp(amt)+" Kc",0,0,'R')
+
+            y=max(note_end, y+14)+6
+
+        # ══════════════════════════════════════════════════════════
+        # VODOZNAK „ZAPLACENO"
+        # ══════════════════════════════════════════════════════════
         if paid:
-            pdf.set_font(fn, 'B', 52)
-            pdf.set_text_color(225, 225, 225)
-            pdf.set_xy(25, 125)
+            pdf.set_font(fn,'B',52)
+            pdf.set_text_color(230,230,230)
             try:
-                pdf.rotate(30); pdf.cell(0, 0, "ZAPLACENO", 0, 0, 'C'); pdf.rotate(0)
+                pdf.rotate(30, PAGE_W/2, PAGE_H/2)
+                pdf.set_xy(30,125); pdf.cell(0,0,"ZAPLACENO",0,0,'C')
+                pdf.rotate(0)
             except: pass
 
-        # ══════════════════════════════════════════════════════════════
+        # ══════════════════════════════════════════════════════════
         # PATIČKA
-        # ══════════════════════════════════════════════════════════════
-        foot_y = PAGE_H - 13
-        accent_line(foot_y - 3, thick=0.7)
-        foot_parts = []
-        if moje.get('nazev'):   foot_parts.append(tx(moje['nazev']))
-        if moje.get('ico'):     foot_parts.append(tx(f"IC: {moje['ico']}"))
-        if moje.get('email'):   foot_parts.append(tx(moje.get('email','')))
-        if moje.get('telefon'): foot_parts.append(tx(moje['telefon']))
-        pdf.set_font(fn, '', 6.5); sc(C_LIGHT)
-        pdf.set_xy(ML, foot_y)
-        pdf.cell(MW - 20, 5, "   |   ".join(foot_parts), 0, 0, 'C')
-        pdf.set_xy(PAGE_W - MR - 20, foot_y)
-        pdf.cell(20, 5, f"str. {pdf.page_no()}", 0, 0, 'R')
+        # ══════════════════════════════════════════════════════════
+        draw_footer()
 
-        try: out = pdf.output(dest='S')
-        except TypeError: out = pdf.output()
-        return out.encode('latin-1') if isinstance(out, str) else bytes(out)
+        try: out=pdf.output(dest='S')
+        except TypeError: out=pdf.output()
+        return out.encode('latin-1') if isinstance(out,str) else bytes(out)
 
     except Exception as e:
         import traceback; traceback.print_exc()
@@ -873,7 +1060,7 @@ def generate_isdoc(fid,uid):
     return ET.tostring(root,encoding='utf-8')
 
 @st.cache_data(show_spinner=False,max_entries=500)
-def cached_pdf(fid,uid,is_pro,rh): return generate_pdf(fid,uid,is_pro)
+def cached_pdf(fid,uid,is_pro,template,rh): return generate_pdf(fid,uid,is_pro,template)
 @st.cache_data(show_spinner=False,max_entries=500)
 def cached_isdoc(fid,uid,rh): return generate_isdoc(fid,uid)
 
@@ -1416,7 +1603,8 @@ else:
                 if st.session_state.get('last_invoice_id'):
                     last_fid = st.session_state['last_invoice_id']
                     last_full = st.session_state['last_invoice_full']
-                    pdf_out = cached_pdf(last_fid, uid, is_pro, f"new_{last_fid}")
+                    _tpl=get_nastaveni(uid).get('faktura_sablona',1) or 1
+                    pdf_out = cached_pdf(last_fid, uid, is_pro, int(_tpl), f"new_{last_fid}")
                     if isinstance(pdf_out, bytes):
                         st.success(f"Faktura {last_full} byla uspesne vystavena!")
                         st.download_button("Stahnout PDF ihned", pdf_out, f"{last_full}.pdf", "application/pdf")
@@ -1466,7 +1654,7 @@ else:
                 else:
                     if c1.button("Zaplaceno",key=f"u1_{row['id']}"): run_command("UPDATE faktury SET uhrazeno=1 WHERE id=?",(row['id'],)); cached_pdf.clear(); cached_isdoc.clear(); st.rerun()
 
-                rh=str(row); pdf_out=cached_pdf(row['id'],uid,is_pro,rh)
+                rh=str(row); _tpl=get_nastaveni(uid).get('faktura_sablona',1) or 1; pdf_out=cached_pdf(row['id'],uid,is_pro,int(_tpl),rh)
                 if isinstance(pdf_out, bytes):
                     c2.download_button("Stahnout PDF", pdf_out, f"{cf}.pdf", "application/pdf", key=f"pdf_{row['id']}", type="primary")
                 else:
@@ -1991,6 +2179,37 @@ else:
                 ud=run_query("SELECT * FROM users WHERE id=?",(uid,),True)
                 if ud['password_hash']==hp(p1): run_command("UPDATE users SET password_hash=? WHERE id=?",(hp(p2),uid)); st.success("Zmeneno.")
                 else: st.error("Nespravne stavajici heslo.")
+
+        with st.expander("Vzhled faktury", expanded=True):
+            cur_tpl = int(c.get('faktura_sablona', 1) or 1)
+            st.markdown("""
+<style>
+.tpl-cards{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:8px 0}
+.tpl-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);
+  border-radius:14px;padding:16px 18px;cursor:pointer;transition:all .2s}
+.tpl-card.active{background:rgba(251,191,36,.08);border-color:rgba(251,191,36,.38)}
+.tpl-card-title{font-family:Syne,sans-serif;font-weight:700;font-size:.95rem;color:#f1f5f9;margin-bottom:4px}
+.tpl-card-desc{font-size:.78rem;color:#64748b;line-height:1.5}
+</style>
+<div class="tpl-cards">
+  <div class="tpl-card {a1}">
+    <div class="tpl-card-title">1 — iDoklad Modern</div>
+    <div class="tpl-card-desc">Levý barevný pruh · rotované štítky sekcí · QR v platební sekci</div>
+  </div>
+  <div class="tpl-card {a2}">
+    <div class="tpl-card-title">2 — iDoklad Classic</div>
+    <div class="tpl-card-desc">Bez pruhu · horizontální layout · QR vlevo pod tabulkou</div>
+  </div>
+</div>""".replace("{a1}", "active" if cur_tpl==1 else "").replace("{a2}", "active" if cur_tpl==2 else ""),
+            unsafe_allow_html=True)
+            new_tpl = st.radio("Varianta faktury", [1, 2],
+                               format_func=lambda x: "1 — iDoklad Modern (levý pruh)" if x==1 else "2 — iDoklad Classic (bez pruhu)",
+                               index=cur_tpl-1, horizontal=True, label_visibility="collapsed")
+            if st.button("Ulozit sablonu"):
+                if c.get('id'): run_command("UPDATE nastaveni SET faktura_sablona=? WHERE id=?",(new_tpl,c['id']))
+                else: run_command("INSERT INTO nastaveni (user_id,faktura_sablona) VALUES (?,?)",(uid,new_tpl))
+                get_nastaveni.clear(); cached_pdf.clear()
+                st.success(f"Sablona {new_tpl} ulozena!"); st.rerun()
 
         with st.expander("Moje Firma"):
             with st.form("setf"):
